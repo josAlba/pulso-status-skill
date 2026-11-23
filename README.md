@@ -176,3 +176,7 @@ Pulso nace de generalizar la página `/backoffice/system/health` de un ecommerce
 Symfony: el esquema de procesos alrededor de un núcleo, el veredicto en grande y las
 señales que circulan por los cables vienen de ahí. La skill añade las pestañas de
 infraestructura y eventos, los modales, el modo oscuro y la independencia del framework.
+
+## Licencia
+
+[MIT](LICENSE)

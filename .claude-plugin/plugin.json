@@ -5,5 +5,13 @@
   "author": {
     "name": "josAlba"
   },
-  "keywords": ["status-page", "health", "monitoring", "dashboard", "skill"]
+  "license": "MIT",
+  "repository": "https://github.com/josAlba/pulso-status-skill",
+  "keywords": [
+    "status-page",
+    "health",
+    "monitoring",
+    "dashboard",
+    "skill"
+  ]
 }
