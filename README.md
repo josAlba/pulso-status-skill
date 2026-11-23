@@ -1,5 +1,7 @@
 # Pulso
 
+[![skills.sh](https://skills.sh/b/josAlba/pulso-status-skill)](https://skills.sh/josAlba/pulso-status-skill)
+
 **Una skill para Claude Code que crea páginas de estado del sistema que se entienden de un vistazo.**
 
 Pídele a Claude «hazme una página de estado» en cualquier proyecto (Symfony, Laravel,
@@ -62,7 +64,26 @@ segundos. Otros escenarios:
 
 ## Instalación
 
-### Como skill personal (todos tus proyectos)
+### Con skills.sh (la forma más rápida)
+
+Con el CLI de [skills.sh](https://skills.sh) (necesita Node 22.20 o posterior), desde la
+carpeta de tu proyecto:
+
+```bash
+npx skills add josAlba/pulso-status-skill --skill pulso -a claude-code
+```
+
+Deja la skill en `.claude/skills/pulso` del proyecto. Añade `-g` para instalarla para
+todos tus proyectos (en `~/.claude/skills/pulso`):
+
+```bash
+npx skills add josAlba/pulso-status-skill --skill pulso -a claude-code -g
+```
+
+Sin `-a claude-code` te pregunta en qué agentes instalarla (Codex, Cursor, etc.); con `-y`
+no hace ninguna pregunta.
+
+### Con el script del repositorio (todos tus proyectos)
 
 ```bash
 git clone https://github.com/josAlba/pulso-status-skill.git ~/Documents/GitHub/pulso-status-skill
