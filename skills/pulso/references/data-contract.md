@@ -54,6 +54,14 @@ Un valor desconocido se trata como `off`.
   "series": [12, 14, 13, 40],         // tendencia, de más antigua a más reciente (infra y modal)
   "seriesLabel": "Latencia (ms)",
 
+  // Solo infraestructura: mapa de conexiones (ver «Reglas de pintado»)
+  "connects": ["db", "cache", {"to": "disk", "passive": true}], // piezas a las que llama
+  "column": 2,                        // fuerza la columna del mapa (0 = la primera)
+  "icon": "cpu",                      // globe, server, cpu, database, bolt, queue, disk, mail, cloud, card, clock, search
+  "meta": "php-fpm · pool www",       // identificación técnica bajo el nombre
+  "value": "3 activos · 9 en espera", // cifra en texto, si no hay gauge
+  "tag": "12 ms",                     // dato corto junto a la cifra (latencia, versión…)
+
   "description": "Importa existencias del almacén cada cinco minutos.", // texto largo del modal
   "since": "2026-11-23T16:42:00+01:00", // desde cuándo está en este estado
   "history": ["active", "active", "off"], // últimas comprobaciones, de más antigua a más reciente
@@ -69,7 +77,19 @@ Reglas de pintado:
   tarjeta como subpiezas. Si una pieza no indica un carril válido, va al último carril.
   Si no hay `lanes`, las piezas se reparten mitad y mitad.
 - **Infraestructura**: las piezas con `tab: "infra"` se agrupan por `group`, en el
-  orden en que aparecen. `gauge` muestra la cifra y la barra; `series`, la tendencia.
+  orden en que aparecen. `gauge` (o `value`) muestra la cifra y la barra; `series`, la tendencia.
+- **Mapa de infraestructura**: si alguna pieza de infraestructura trae `connects`, la
+  pestaña empieza con un mapa del camino que recorre una petición, de izquierda a
+  derecha (visitantes → servidor web → aplicación → base de datos y caché). Las piezas
+  conectadas se colocan en columnas: cada una va a la derecha de quien la llama, y las
+  que solo llaman a otras van justo antes de la primera a la que llaman. Si la columna
+  calculada no te convence, fíjala con `column`. Por los cables viajan señales como en
+  Procesos, con el estado del peor de sus dos extremos. Una conexión `passive` (disco,
+  montajes, ficheros compartidos) se pinta discontinua y sin señales. Las tarjetas del
+  mapa muestran icono, `meta`, la descripción en dos líneas, la cifra con su `tag`,
+  `detail` y los cuatro primeros `facts`. Las piezas sin conexiones (CPU, memoria,
+  servicios externos…) siguen debajo, agrupadas por `group`. En el modal, cada pieza
+  del mapa lista a qué piezas se conecta y cuáles la llaman.
 - **Modal**: cualquier pieza o subpieza se abre con un clic y muestra todo lo anterior.
   La URL cambia a `#procesos/<key>` o `#infra/<key>` para poder compartirla.
 - Los `href` solo se aceptan si empiezan por `http(s)://`, `/`, `.`, `#` o `?`.

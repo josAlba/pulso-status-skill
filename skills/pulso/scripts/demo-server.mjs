@@ -48,6 +48,8 @@ function scenario(name) {
   const mailWorking = live ? phase % 14 < 7 : !ko;
   const gatewaySlow = ko || (live && phase >= 40);
   const now = new Date();
+  const visitors = Math.round(series(13, 38, 9).at(-1));
+  const busy = mailWorking ? 3 : 1;
 
   const nodes = [
     // Procesos · carril izquierdo
@@ -83,17 +85,40 @@ function scenario(name) {
       facts: ko ? {'Sincronizar stock #8812': 'Tiempo de espera agotado', 'Sincronizar stock #8813': 'Tiempo de espera agotado', 'Enviar factura #1204': 'Destinatario rechazado'} : {},
       links: ko ? [{label: 'Revisar tareas fallidas', href: '#procesos/failed'}] : []},
 
-    // Infraestructura
-    {key: 'db', tab: 'infra', group: 'Datos', label: 'Base de datos', status: 'active', detail: 'MariaDB 10.11 · réplica al día',
-      gauge: {value: 18, max: 150, unit: 'conexiones'}, series: series(1, 4, 1.2), seriesLabel: 'Latencia de consultas, últimos 5 min (ms)',
-      history: history(), since: minutes(4000), facts: {'Versión': '10.11.9', 'Retraso de la réplica': '0 s', 'Consultas lentas (1 h)': 2}},
-    {key: 'cache', tab: 'infra', group: 'Datos', label: 'Caché', status: 'active', detail: 'Acierto del 97 %',
-      gauge: {value: 412, max: 1024, unit: 'MB'}, series: series(4, 97, 1), seriesLabel: 'Porcentaje de aciertos',
-      history: history(), facts: {'Claves': '184.302', 'Expulsadas (1 h)': 0}},
-    {key: 'disk', tab: 'infra', group: 'Datos', label: 'Disco', status: ko ? 'attention' : 'active', detail: ko ? 'Quedan 9 GB libres' : 'Quedan 37 GB libres',
+    // Infraestructura · mapa: el camino de una petición, de izquierda a derecha
+    {key: 'visitors', tab: 'infra', icon: 'globe', label: 'Visitantes', meta: 'Internet', status: 'active',
+      description: 'Quien entra en la tienda o en el panel de administración desde internet.',
+      value: `${visitors} conexiones abiertas`, connects: ['web'], history: history(),
+      facts: {'Tienda': '/', 'Panel': '/admin'}},
+    {key: 'disk', tab: 'infra', icon: 'disk', label: 'Disco', meta: 'Disco del servidor', status: ko ? 'attention' : 'active',
+      detail: ko ? 'Quedan 9 GB libres' : 'Quedan 37 GB libres',
+      description: ko ? 'Los registros de la aplicación crecen más de lo normal desde esta mañana.' : 'Imágenes, feeds, sitemaps, cachés y registros.',
       gauge: {value: ko ? 91 : 63, max: 100, unit: '%'}, history: history(ko ? 'aawwwwww' : ''),
-      description: ko ? 'Los registros de la aplicación crecen más de lo normal desde esta mañana.' : undefined,
-      facts: {'Volumen': '/var/lib', 'Tamaño': '100 GB'}},
+      facts: {'Libre': ko ? '9 GB' : '37 GB', 'Tamaño': '100 GB', 'Volumen': '/var/lib'}},
+    {key: 'web', tab: 'infra', icon: 'server', label: 'Servidor web', meta: 'nginx', status: 'active',
+      description: 'Recibe las peticiones, sirve los ficheros estáticos y pasa el resto a la aplicación.',
+      value: `${visitors} conexiones activas`, tag: '1,1 ms', connects: ['app', {to: 'disk', passive: true}], history: history(),
+      facts: {'Leyendo / escribiendo': '0 / 2', 'En espera (keep-alive)': Math.max(0, visitors - 2), 'Peticiones atendidas hoy': '48.210'}},
+    {key: 'app', tab: 'infra', icon: 'cpu', label: 'Aplicación', meta: 'php-fpm · pool www', status: mailWorking ? 'working' : 'active',
+      description: 'Ejecuta la tienda y el panel: cada petición la atiende un proceso del pool.',
+      value: `${busy} ${busy === 1 ? 'activo' : 'activos'} · ${12 - busy} en espera`, tag: '12 ms', connects: ['db', 'cache'], history: history(),
+      facts: {'Procesos': `${12} de 24`, 'Peticiones (1 min)': 618, 'Límite alcanzado': '0 veces'}},
+    {key: 'workers', tab: 'infra', icon: 'queue', label: 'Procesos en segundo plano', meta: 'colas · programador', status: ko ? 'attention' : 'active',
+      detail: ko ? 'La sincronización de stock está parada' : '',
+      description: 'Procesan las colas y lanzan las tareas periódicas: pagos, correos, stock y feeds.',
+      value: ko ? '5 de 6 en marcha' : '6 de 6 en marcha', connects: ['db', 'cache'], history: history(ko ? 'aaawwwww' : ''),
+      facts: {'Con señal reciente': ko ? 5 : 6, 'Para revisar': 0, 'Parados': ko ? 1 : 0},
+      links: [{label: 'Ver los procesos', href: '#procesos'}]},
+    {key: 'db', tab: 'infra', icon: 'database', label: 'Base de datos', meta: 'MariaDB 10.11', status: 'active', detail: 'Réplica al día',
+      description: 'Guarda pedidos, catálogo, clientes y las colas de tareas.',
+      gauge: {value: 18, max: 150, unit: 'conexiones'}, tag: '4 ms', series: series(1, 4, 1.2), seriesLabel: 'Latencia de consultas, últimos 5 min (ms)',
+      history: history(), since: minutes(4000), facts: {'Versión': '10.11.9', 'Retraso de la réplica': '0 s', 'Consultas lentas (1 h)': 2}},
+    {key: 'cache', tab: 'infra', icon: 'bolt', label: 'Caché', meta: 'Redis 7.4', status: 'active', detail: 'Acierto del 97 %',
+      description: 'Catálogo, menús y consultas frecuentes, para responder sin ir a la base de datos.',
+      gauge: {value: 412, max: 1024, unit: 'MB'}, tag: '0,3 ms', series: series(4, 97, 1), seriesLabel: 'Porcentaje de aciertos',
+      history: history(), facts: {'Claves': '184.302', 'Expulsadas (1 h)': 0}},
+
+    // Infraestructura · tarjetas sin conexiones, agrupadas
     {key: 'cpu', tab: 'infra', group: 'Servidor', label: 'CPU', status: 'active', detail: '4 núcleos',
       gauge: {value: Math.round(series(7, 34, 12).at(-1)), max: 100, unit: '%'}, series: series(7, 34, 12), seriesLabel: 'Uso, últimos 5 min (%)', history: history()},
     {key: 'memory', tab: 'infra', group: 'Servidor', label: 'Memoria', status: 'active', detail: 'Sin uso de swap',

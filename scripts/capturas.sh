@@ -38,7 +38,7 @@ shot() { # nombre ancho alto ruta
 
 shot procesos         1440 900 "/?scenario=ok&theme=light"
 shot procesos-averia  1440 900 "/?scenario=ko&theme=light"
-shot infraestructura  1440 900 "/?scenario=ko&theme=light#infra"
+shot infraestructura  1440 960 "/?scenario=ko&theme=light#infra"
 shot eventos          1440 900 "/?scenario=ko&theme=light#eventos"
 shot detalle          1440 900 "/?scenario=ko&theme=light#procesos/stock"
 shot detalle-infra    1440 900 "/?scenario=ko&theme=light#infra/gateway"

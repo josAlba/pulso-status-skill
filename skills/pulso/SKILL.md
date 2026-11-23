@@ -38,8 +38,13 @@ léelas del proyecto.
 - **Lo que ya existe**: endpoints de health, comandos de monitorización, tablas de
   latidos (heartbeats), métricas. Reutilízalos antes de crear nada nuevo.
 
+- **Conexiones**: qué llama a qué en una petición normal (proxy o servidor web →
+  aplicación → base de datos, caché, colas). Sácalo de la configuración del servidor
+  web, de `docker-compose*.yml` y de las variables de conexión. Con ello se dibuja el
+  mapa de infraestructura (`connects` en el contrato).
+
 Presenta al usuario la lista de piezas que vas a vigilar, agrupadas en procesos
-(carril izquierdo y derecho) e infraestructura (grupos). Si hay dudas sobre qué
+(carril izquierdo y derecho) e infraestructura (el mapa de conexiones y los grupos). Si hay dudas sobre qué
 incluir, pregunta antes de seguir.
 
 ### 2. Decide cómo se calcula cada estado (en el backend)

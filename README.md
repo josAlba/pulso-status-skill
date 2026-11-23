@@ -20,8 +20,10 @@ completa ya diseñada y probada.
 - **Procesos**: esquema con un núcleo al centro y las piezas en dos carriles,
   unidas por cables por los que circulan señales. Las señales son rápidas si la pieza
   está trabajando, lentas si hay que revisarla y no aparecen si está parada.
-- **Infraestructura**: tarjetas agrupadas con cifra, medidor y tendencia (base de datos,
-  caché, disco, CPU, memoria, servicios externos).
+- **Infraestructura**: mapa del camino que recorre una petición (visitantes → servidor
+  web → aplicación → base de datos y caché), con cables animados como los de Procesos,
+  y debajo tarjetas agrupadas con cifra, medidor y tendencia (CPU, memoria, servicios
+  externos).
 - **Eventos**: línea de tiempo con los cambios de estado recientes.
 - **Modales de detalle** para cualquier pieza: descripción, desde cuándo está así, tira
   de las últimas comprobaciones, tendencia ampliada, datos y enlaces (runbooks, logs).
@@ -35,7 +37,7 @@ completa ya diseñada y probada.
 | Algo falla | Detalle de una pieza |
 |---|---|
 | ![Avería](docs/screenshots/procesos-averia.jpg) | ![Modal de detalle](docs/screenshots/detalle.jpg) |
-| **Infraestructura** | **Detalle con tendencia** |
+| **Mapa de infraestructura** | **Detalle con tendencia** |
 | ![Infraestructura](docs/screenshots/infraestructura.jpg) | ![Modal de infraestructura](docs/screenshots/detalle-infra.jpg) |
 | **Eventos** | **Modo oscuro** |
 | ![Eventos](docs/screenshots/eventos.jpg) | ![Modo oscuro](docs/screenshots/oscuro.jpg) |
@@ -177,6 +179,14 @@ pulso-status-skill/
   ],
   "events": [{"at": "2026-11-23T16:42:00+01:00", "status": "off", "title": "La sincronización de stock dejó de dar señal", "node": "stock"}]
 }
+```
+
+Para el mapa de infraestructura, cada pieza indica a qué otras llama:
+
+```json
+{"key": "app", "tab": "infra", "icon": "cpu", "label": "Aplicación", "meta": "php-fpm · pool www",
+ "status": "active", "value": "3 activos · 9 en espera", "tag": "12 ms",
+ "connects": ["db", "cache", {"to": "disk", "passive": true}]}
 ```
 
 Estados: `active`, `working`, `attention`, `off` y `error`. La referencia completa está en

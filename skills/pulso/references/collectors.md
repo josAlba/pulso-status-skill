@@ -91,6 +91,19 @@ Las piezas de negocio son las que más valor dan: «Pedidos pendientes de pago»
 «Feeds publicados hoy», «Correos rebotados». Úsalas como hijas del proceso que las
 atiende. Ejemplo: pagos sin confirmar más de 15 minutos → `attention`.
 
+### Mapa de infraestructura
+
+- Una pieza por salto del recorrido de una petición: visitantes (conexiones abiertas
+  según el servidor web), servidor web (`stub_status` de nginx, `server-status` de
+  Apache), aplicación (estado del pool de php-fpm, de Puma o de Gunicorn), procesos en
+  segundo plano (resumen de los de la pestaña Procesos), base de datos y caché.
+- `connects` indica quién llama a quién, no por dónde van las respuestas. El disco y
+  otros recursos que se leen sin peticiones van como conexión `passive`.
+- Si una pieza del mapa resume otras (por ejemplo, «5 de 6 en marcha»), su estado es
+  `attention` cuando alguna de ellas falla, y su `detail` dice cuál.
+- `value` y `tag` son para cifras que no caben en `gauge`: «3 activos · 9 en espera»
+  y la latencia de la última comprobación.
+
 ## Historial y eventos
 
 - `history`: guarda el estado de cada pieza en cada evaluación en una lista corta

@@ -19,6 +19,9 @@ incidencia. Cada decisión de diseño sirve para eso.
    Con `prefers-reduced-motion` todo queda quieto.
 5. **El detalle está a un clic, nunca en la vista principal.** Las tarjetas dicen una
    sola frase. Descripción, historial, tendencias, datos y enlaces van al modal.
+   Excepción: las tarjetas del mapa de infraestructura explican la arquitectura, así
+   que llevan la descripción (dos líneas como mucho) y hasta cuatro datos. Historial,
+   tendencia y enlaces siguen en el modal.
 6. **Superficies neutras.** Fondo glaciar frío, tarjetas casi blancas, una sola sombra
    (la del modal). Así el color de estado es lo único que destaca.
 
@@ -70,7 +73,14 @@ Las etiquetas de la pestaña y el aviso `noscript` están en el HTML.
 - Por debajo de 900 px el esquema pasa a una columna con el núcleo arriba y sin cables.
 - Las pestañas solo aparecen si hay más de una con contenido. Su contador indica las
   piezas con problemas y toma el color de la peor.
-- Infraestructura: rejilla automática de tarjetas de 260 px o más, agrupadas.
+- Infraestructura: si hay conexiones (`connects`), primero el mapa: una columna por
+  paso del recorrido de una petición, piezas centradas en vertical y cables curvos
+  que salen del lateral de la tarjeta, repartidos para no salir del mismo punto. Por
+  debajo de 1100 px las columnas se apilan y los cables desaparecen (las conexiones
+  siguen en el modal). Después, rejilla automática de tarjetas de 260 px o más,
+  agrupadas, para las piezas sin conexiones.
+- Los iconos del mapa están en `ICONS`, en el script: trazo de 1,7 px sobre 24×24.
+  Añade los que falten con el mismo estilo; un nombre desconocido muestra el punto de estado.
 - Eventos: línea de tiempo de hasta 860 px de ancho.
 
 ## Accesibilidad

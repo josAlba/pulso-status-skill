@@ -213,6 +213,46 @@
     .trend .area { fill: color-mix(in srgb, var(--tone) 12%, transparent); }
     .trend-label { color: var(--muted); font-size: .72rem; }
 
+    /* ── Infraestructura: mapa de conexiones ───────────────────────────────── */
+    .topo {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+      gap: 24px clamp(40px, 5vw, 72px);
+      padding: 8px 0 12px;
+    }
+    .topo-col { position: relative; z-index: 1; display: grid; gap: 20px; align-content: center; }
+    .node { display: grid; gap: 10px; padding: 14px 16px 12px; }
+    .node-head { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; align-items: center; }
+    .node-icon {
+      grid-row: span 2; display: grid; place-items: center;
+      width: 40px; height: 40px; border-radius: 9px;
+      color: var(--tone); background: color-mix(in srgb, var(--tone) 11%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 28%, transparent);
+    }
+    .node-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .node[data-status="off"] .node-icon { background: transparent; box-shadow: inset 0 0 0 1px var(--rule); }
+    .node .card-name { font-size: 1rem; font-weight: 700; }
+    .node-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; color: var(--muted); font-size: .8rem; }
+    .node-sub > span:empty { display: none; }
+    .node-desc { margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .node-value { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; font-size: 1.1rem; font-weight: 700; line-height: 1.25; font-variant-numeric: tabular-nums; }
+    .node-value .tile-unit { margin-left: 4px; font-size: inherit; font-weight: inherit; color: inherit; }
+    .node[data-status="off"] .node-value { color: var(--muted); }
+    .node-tag { padding: 1px 8px; border: 1px solid var(--rule); border-radius: 6px; font-size: .74rem; font-weight: 600; color: var(--muted); }
+    .node .gauge { margin: 0; }
+    .node .card-detail { margin: 0; }
+    .node-desc:empty, .node-tag:empty, .node .card-detail:empty, .node-facts:empty { display: none; }
+    .node-facts { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0; padding-top: 10px; border-top: 1px solid var(--rule); font-size: .8rem; }
+    .node-facts dt { color: var(--muted); }
+    .node-facts dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+    .wire--passive { stroke-dasharray: 2 5; }
+    .wire-end { fill: var(--active); }
+    .wire-end[data-status="attention"] { fill: var(--attention); }
+    .wire-end[data-status="off"] { fill: var(--off); }
+    .wire-end[data-status="error"] { fill: var(--error); }
+    .infra > .topo + .group { padding-top: 20px; border-top: 1px solid var(--rule); }
+
     /* ── Pestaña Eventos ───────────────────────────────────────────────────── */
     .events { list-style: none; margin: 0; padding: 0; max-width: 860px; }
     .event { display: grid; grid-template-columns: 5.5rem 10px 1fr; gap: 0 16px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--rule); }
@@ -280,6 +320,11 @@
 
     body.is-offline .panel { opacity: .5; filter: grayscale(1); }
 
+    @media (max-width: 1100px) {
+      .topo { display: flex; flex-direction: column; gap: 12px; }
+      .topo > .wires { display: none; }
+      .topo-col { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; align-content: start; }
+    }
     @media (max-width: 900px) {
       .map { display: flex; flex-direction: column; align-items: stretch; gap: 22px; }
       .wires { display: none; }
@@ -358,6 +403,8 @@
         historyAxis: (n) => [`Hace ${n}`, 'Ahora'],
         of: (max, unit) => `de ${max}${unit ? ' ' + unit : ''}`,
         parts: 'Partes',
+        connectsTo: 'Se conecta a',
+        usedBy: 'La llaman',
         details: 'Detalles',
         close: 'Cerrar',
         noProcesses: 'No hay procesos que vigilar todavía.',
@@ -369,6 +416,21 @@
       // Partículas por estado: cuántas viajan por el cable y cuánto tardan en llegar al núcleo.
       const FLOW = {working: [3, 1.6], active: [1, 3.4], attention: [1, 6]};
       const SVG = 'http://www.w3.org/2000/svg';
+      // Iconos del mapa de infraestructura (24×24, trazo). Añade aquí los que necesites.
+      const ICONS = {
+        globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.4 2.5 3.6 5.5 3.6 9s-1.2 6.5-3.6 9c-2.4-2.5-3.6-5.5-3.6-9S9.6 5.5 12 3z"/>',
+        server: '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+        cpu: '<rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9.5 2.5V6M14.5 2.5V6M9.5 18v3.5M14.5 18v3.5M2.5 9.5H6M2.5 14.5H6M18 9.5h3.5M18 14.5h3.5"/>',
+        database: '<ellipse cx="12" cy="5.5" rx="7.5" ry="2.5"/><path d="M4.5 5.5v13c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5v-13M4.5 12c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5"/>',
+        bolt: '<path d="M13 2.5 5 13.5h6.5L11 21.5l8-11h-6.5z"/>',
+        queue: '<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="18.5" cy="18" r="1.5"/>',
+        disk: '<rect x="3" y="13" width="18" height="7" rx="2"/><path d="M5.5 13 8 5h8l2.5 8M7 16.5h.01M10.5 16.5h.01"/>',
+        mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>',
+        cloud: '<path d="M7 18.5h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 9.7 4.4 4.4 0 0 0 7 18.5z"/>',
+        card: '<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6.5 15h4"/>',
+        clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+        search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+      };
 
       const root = document.getElementById('pulso');
       const dialog = document.getElementById('pulso-detail');
@@ -381,8 +443,10 @@
       const relativeFormat = new Intl.RelativeTimeFormat(lang, {numeric: 'auto'});
       const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
       const stacked = window.matchMedia('(max-width: 900px)');
+      const topoStacked = window.matchMedia('(max-width: 1100px)');
 
       let data = null;
+      let topo = null;
       let signature = '';
       let openKey = null;
       let timer = null;
@@ -452,8 +516,50 @@
       }
       const byKey = (key) => data?.nodes.find((n) => n.key === key);
       const childrenOf = (key) => data.nodes.filter((n) => n.parent === key);
-      const shape = (d) => d.nodes.map((n) => [n.key, n.tab, n.lane, n.parent, n.group, !!n.gauge, !!n.series].join('|')).join(';')
+      const shape = (d) => d.nodes.map((n) => [n.key, n.tab, n.lane, n.parent, n.group, !!n.gauge, !!n.series,
+        n.value != null, n.tag != null, n.icon, n.column, JSON.stringify(n.connects ?? null)].join('|')).join(';')
         + '#' + d.lanes.map((l) => l.key + l.side + l.label).join(';');
+
+      /* ── Mapa de infraestructura: columnas a partir de las conexiones ───── */
+      function topology(nodes) {
+        const keys = new Set(nodes.map((n) => n.key));
+        const edges = [];
+        for (const n of nodes) {
+          for (const link of [].concat(n.connects || [])) {
+            const to = typeof link === 'string' ? link : link?.to;
+            if (to && to !== n.key && keys.has(to)) edges.push({from: n.key, to, passive: typeof link === 'object' && !!link.passive});
+          }
+        }
+        if (!edges.length) return null;
+        const linked = new Set(edges.flatMap((e) => [e.from, e.to]));
+        const members = nodes.filter((n) => linked.has(n.key) || Number.isInteger(n.column));
+        const flow = edges.filter((e) => !e.passive);
+        const touches = (key, list) => list.filter((e) => e.from === key || e.to === key);
+        const col = Object.fromEntries(members.map((n) => [n.key, 0]));
+        // Cada pieza, a la derecha de quien la llama (con tope por si hay ciclos).
+        for (let i = 0; i < members.length; i++) {
+          for (const e of flow) col[e.to] = Math.max(col[e.to], Math.min(col[e.from] + 1, members.length));
+        }
+        // Quien solo llama, justo antes de la primera pieza a la que llama.
+        const called = new Set(flow.map((e) => e.to));
+        for (const n of members) {
+          const targets = flow.filter((e) => e.from === n.key).map((e) => col[e.to]);
+          if (!called.has(n.key) && targets.length) col[n.key] = Math.max(0, Math.min(...targets) - 1);
+        }
+        // Con solo conexiones pasivas (disco, montajes), una columna antes que su pareja.
+        for (const n of members) {
+          if (touches(n.key, flow).length) continue;
+          const partners = touches(n.key, edges).map((e) => col[e.from === n.key ? e.to : e.from]);
+          if (partners.length) col[n.key] = Math.max(0, Math.min(...partners) - 1);
+        }
+        for (const n of members) if (Number.isInteger(n.column) && n.column >= 0) col[n.key] = n.column;
+        const used = [...new Set(Object.values(col))].sort((a, b) => a - b);
+        return {
+          edges,
+          members: new Set(members.map((n) => n.key)),
+          columns: used.map((c) => members.filter((n) => col[n.key] === c)),
+        };
+      }
 
       /* ── Piezas ─────────────────────────────────────────────────────────── */
       function card(node, extraClass = '') {
@@ -463,13 +569,37 @@
             signal(),
             h('h3', {class: 'card-name'}, h('button', {class: 'open', type: 'button', 'data-open': node.key, 'data-role': 'label'})),
             h('span', {class: 'pill', 'data-role': 'pill'})),
-          extraClass === 'tile' && node.gauge ? [
+          extraClass === 'tile' && (node.gauge || node.value != null) ? [
             h('p', {class: 'tile-value'}, h('span', {'data-role': 'value'}), h('span', {class: 'tile-unit', 'data-role': 'unit'})),
-            h('div', {class: 'gauge', 'aria-hidden': 'true'}, h('span', {'data-role': 'gauge'})),
+            node.gauge ? h('div', {class: 'gauge', 'aria-hidden': 'true'}, h('span', {'data-role': 'gauge'})) : null,
           ] : null,
           extraClass === 'tile' && node.series ? [trend(), h('span', {class: 'trend-label', 'data-role': 'trend-label'})] : null,
           h('p', {class: 'card-detail', 'data-role': 'detail'}),
           kids.length ? h('ul', {class: 'subs'}, kids.map(sub)) : null);
+        fill(element, node);
+        return element;
+      }
+      function icon(name) {
+        const box = h('span', {class: 'node-icon', 'aria-hidden': 'true'});
+        if (!ICONS[name]) { box.append(signal()); return box; }
+        const svg = s('svg', {viewBox: '0 0 24 24'});
+        svg.innerHTML = ICONS[name];
+        box.append(svg);
+        return box;
+      }
+      function topoCard(node) {
+        const element = h('article', {class: 'card node', 'data-key': node.key, 'data-topo': true},
+          h('header', {class: 'node-head'},
+            icon(node.icon),
+            h('h3', {class: 'card-name'}, h('button', {class: 'open', type: 'button', 'data-open': node.key, 'data-role': 'label'})),
+            h('p', {class: 'node-sub'}, h('span', {'data-role': 'meta'}), h('span', {class: 'pill', 'data-role': 'pill'}))),
+          h('p', {class: 'node-desc', 'data-role': 'desc'}),
+          node.gauge || node.value != null || node.tag != null ? h('p', {class: 'node-value'},
+            h('span', {}, h('span', {'data-role': 'value'}), h('span', {class: 'tile-unit', 'data-role': 'unit'})),
+            h('span', {class: 'node-tag', 'data-role': 'tag'})) : null,
+          node.gauge?.max ? h('div', {class: 'gauge', 'aria-hidden': 'true'}, h('span', {'data-role': 'gauge'})) : null,
+          h('p', {class: 'card-detail', 'data-role': 'detail'}),
+          h('dl', {class: 'node-facts', 'data-role': 'facts'}));
         fill(element, node);
         return element;
       }
@@ -508,11 +638,26 @@
         set('label', node.label);
         set('pill', TEXT.statuses[node.status]);
         set('detail', node.detail || '');
+        set('meta', node.meta || '');
+        set('desc', node.description || '');
+        set('tag', node.tag == null ? '' : String(node.tag));
         if (node.gauge) {
           const parts = gaugeParts(node.gauge);
           set('value', parts.value);
           set('unit', parts.unit);
           owned(element, 'gauge')?.style.setProperty('--fill', `${parts.percent ?? 0}%`);
+        } else if (node.value != null) {
+          set('value', String(node.value));
+          set('unit', '');
+        }
+        const facts = owned(element, 'facts');
+        if (facts) {
+          const rows = Object.entries(node.facts || {}).slice(0, 4);
+          const text = JSON.stringify(rows);
+          if (facts.dataset.rows !== text) {
+            facts.dataset.rows = text;
+            facts.replaceChildren(...rows.flatMap(([label, value]) => [h('dt', {}, label), h('dd', {}, String(value))]));
+          }
         }
         if (node.series) {
           const svg = owned(element, 'trend');
@@ -538,16 +683,21 @@
           h('div', {class: 'core-disc'}, h('span', {class: 'core-name', id: 'pulso-core-name'}), h('span', {class: 'core-state', id: 'pulso-core-state'})));
         const map = h('div', {class: 'map', id: 'pulso-map'}, wires, side('left'), core, side('right'));
         panel.replaceChildren(map);
-        resizer.disconnect();
         resizer.observe(map);
       }
       function buildInfra() {
         const panel = document.getElementById('panel-infra');
         const top = data.nodes.filter((n) => n.tab === 'infra' && !n.parent);
-        const groups = [...new Set(top.map((n) => n.group || ''))];
-        panel.replaceChildren(h('div', {class: 'infra'}, groups.map((group) => h('section', {class: 'group', 'aria-label': group || null},
+        topo = topology(top);
+        const rest = topo ? top.filter((n) => !topo.members.has(n.key)) : top;
+        const groups = [...new Set(rest.map((n) => n.group || ''))];
+        const map = topo ? h('div', {class: 'topo', id: 'pulso-topo', style: `--cols:${topo.columns.length}`},
+          s('svg', {class: 'wires', id: 'pulso-topo-wires', 'aria-hidden': 'true'}),
+          topo.columns.map((column, i) => h('div', {class: 'topo-col', 'data-col': i}, column.map(topoCard)))) : null;
+        panel.replaceChildren(h('div', {class: 'infra'}, map, groups.map((group) => h('section', {class: 'group', 'aria-label': group || null},
           group ? h('h2', {class: 'group-title'}, group) : null,
-          h('div', {class: 'tiles'}, top.filter((n) => (n.group || '') === group).map((n) => card(n, 'tile')))))));
+          h('div', {class: 'tiles'}, rest.filter((n) => (n.group || '') === group).map((n) => card(n, 'tile')))))));
+        if (map) resizer.observe(map);
       }
       function buildEvents() {
         const panel = document.getElementById('panel-events');
@@ -567,8 +717,80 @@
         })));
       }
 
-      /* ── Cables animados entre las tarjetas de procesos y el núcleo ──────── */
+      /* ── Cables animados ────────────────────────────────────────────────── */
+      function sparks(wires, id, status, index) {
+        const flow = FLOW[status];
+        if (!flow || calm.matches) return;
+        const [count, seconds] = flow;
+        for (let i = 0; i < count; i++) {
+          const spark = s('circle', {r: status === 'working' ? 3 : 2.5, class: 'spark', 'data-status': status});
+          const motion = s('animateMotion', {dur: `${seconds}s`, repeatCount: 'indefinite', begin: `${-((index * 0.37 + i / count) * seconds).toFixed(2)}s`, keyPoints: '0;1', keyTimes: '0;1', calcMode: 'spline', keySplines: '.45 0 .55 1'});
+          motion.append(s('mpath', {href: `#${id}`}));
+          spark.append(motion);
+          wires.append(spark);
+        }
+      }
       function draw() {
+        drawProcesses();
+        drawInfra();
+      }
+      // Estado de un cable del mapa: el peor de sus dos extremos.
+      function edgeStatus(a, b) {
+        for (const status of ['error', 'off', 'attention', 'working']) if (a === status || b === status) return status;
+        return 'active';
+      }
+      function drawInfra() {
+        const map = document.getElementById('pulso-topo');
+        const wires = document.getElementById('pulso-topo-wires');
+        if (!map || !wires || !topo) return;
+        wires.replaceChildren();
+        if (topoStacked.matches || map.offsetParent === null) return;
+        const origin = map.getBoundingClientRect();
+        const boxes = {};
+        map.querySelectorAll('.node').forEach((element) => {
+          const r = element.getBoundingClientRect();
+          boxes[element.dataset.key] = {
+            key: element.dataset.key, col: Number(element.parentElement.dataset.col), sides: {},
+            left: r.left - origin.left, right: r.right - origin.left, top: r.top - origin.top, bottom: r.bottom - origin.top,
+            cx: r.left + r.width / 2 - origin.left, cy: r.top + r.height / 2 - origin.top,
+          };
+        });
+        // Lado de cada extremo: hacia la columna del otro; en la misma columna, arriba o abajo.
+        const lines = topo.edges.map((edge) => {
+          const a = boxes[edge.from], b = boxes[edge.to];
+          if (!a || !b) return null;
+          const sides = b.col > a.col ? ['right', 'left'] : b.col < a.col ? ['left', 'right'] : a.cy < b.cy ? ['bottom', 'top'] : ['top', 'bottom'];
+          const line = {edge, ends: [null, null]};
+          [[a, b, sides[0], 0], [b, a, sides[1], 1]].forEach(([box, other, side, end]) => (box.sides[side] ||= []).push({line, end, other, side}));
+          return line;
+        }).filter(Boolean);
+        // Reparte los extremos de cada lado para que los cables no salgan del mismo punto.
+        for (const box of Object.values(boxes)) {
+          for (const [side, list] of Object.entries(box.sides)) {
+            const vertical = side === 'left' || side === 'right';
+            list.sort((p, q) => vertical ? p.other.cy - q.other.cy : p.other.cx - q.other.cx);
+            list.forEach((item, i) => {
+              const t = (i + 1) / (list.length + 1);
+              const y0 = box.top + 28;
+              const y1 = Math.max(y0, box.top + Math.min(box.bottom - box.top - 28, 170));
+              item.line.ends[item.end] = vertical
+                ? {side, x: side === 'right' ? box.right : box.left, y: y0 + (y1 - y0) * t}
+                : {side, x: box.left + (box.right - box.left) * (0.25 + 0.5 * t), y: side === 'bottom' ? box.bottom : box.top};
+            });
+          }
+        }
+        const push = (p, d) => ({right: [p.x + d, p.y], left: [p.x - d, p.y], bottom: [p.x, p.y + d], top: [p.x, p.y - d]}[p.side]);
+        lines.forEach(({edge, ends: [p, q]}, index) => {
+          const d = Math.max(28, Math.abs(p.side === 'top' || p.side === 'bottom' ? q.y - p.y : q.x - p.x) * 0.45);
+          const id = `topo-wire-${index}`;
+          const status = edgeStatus(byKey(edge.from)?.status, byKey(edge.to)?.status);
+          wires.append(s('path', {id, class: `wire${edge.passive ? ' wire--passive' : ''}`, 'data-status': status,
+            d: `M${p.x},${p.y} C${push(p, d)} ${push(q, d)} ${q.x},${q.y}`}));
+          for (const point of [p, q]) wires.append(s('circle', {class: 'wire-end', cx: point.x, cy: point.y, r: 2.5, 'data-status': status}));
+          if (!edge.passive) sparks(wires, id, status, index);
+        });
+      }
+      function drawProcesses() {
         const map = document.getElementById('pulso-map');
         const wires = document.getElementById('pulso-wires');
         if (!map || !wires) return;
@@ -593,16 +815,7 @@
           const status = element.dataset.status;
           const id = `wire-${index}`;
           wires.append(s('path', {id, d, class: 'wire', 'data-status': status}));
-          const flow = FLOW[status];
-          if (!flow || calm.matches) return;
-          const [count, seconds] = flow;
-          for (let i = 0; i < count; i++) {
-            const spark = s('circle', {r: status === 'working' ? 3 : 2.5, class: 'spark', 'data-status': status});
-            const motion = s('animateMotion', {dur: `${seconds}s`, repeatCount: 'indefinite', begin: `${-((index * 0.37 + i / count) * seconds).toFixed(2)}s`, keyPoints: '0;1', keyTimes: '0;1', calcMode: 'spline', keySplines: '.45 0 .55 1'});
-            motion.append(s('mpath', {href: `#${id}`}));
-            spark.append(motion);
-            wires.append(spark);
-          }
+          sparks(wires, id, status, index);
         });
       }
       const resizer = new ResizeObserver(() => requestAnimationFrame(draw));
@@ -671,7 +884,7 @@
           if (active && focus) tab.focus();
         }
         if (history && location.hash.slice(1).split('/')[0] !== TABS[id]) window.history.replaceState(null, '', `#${TABS[id]}`);
-        if (id === 'processes') requestAnimationFrame(draw);
+        if (id !== 'events') requestAnimationFrame(draw);
       }
 
       /* ── Modal de detalle ───────────────────────────────────────────────── */
@@ -681,6 +894,9 @@
         const history = (node.history || []).filter((status) => STATUSES.includes(status));
         const value = node.gauge ? gaugeParts(node.gauge) : null;
         const since = node.since ? new Date(node.since) : null;
+        const edges = topo?.members.has(node.key) ? topo.edges : [];
+        const linksOut = edges.filter((e) => e.from === node.key).map((e) => byKey(e.to)).filter(Boolean);
+        const linksIn = edges.filter((e) => e.to === node.key).map((e) => byKey(e.from)).filter(Boolean);
         dialog.dataset.status = node.status;
         const body = h('div', {class: 'detail-body', 'data-key': node.key, tabindex: '-1'},
           h('header', {class: 'detail-head'},
@@ -702,6 +918,8 @@
             h('ol', {class: 'history'}, history.map((status) => h('li', {'data-status': status, title: TEXT.statuses[status]}))),
             h('p', {class: 'history-axis', 'aria-hidden': 'true'}, ...TEXT.historyAxis(history.length).map((label) => h('span', {}, label)))) : null,
           kids.length ? h('div', {class: 'detail-section'}, h('h3', {}, TEXT.parts), h('ul', {class: 'subs'}, kids.map(sub))) : null,
+          linksOut.length ? h('div', {class: 'detail-section'}, h('h3', {}, TEXT.connectsTo), h('ul', {class: 'subs'}, linksOut.map(sub))) : null,
+          linksIn.length ? h('div', {class: 'detail-section'}, h('h3', {}, TEXT.usedBy), h('ul', {class: 'subs'}, linksIn.map(sub))) : null,
           facts.length ? h('div', {class: 'detail-section'}, h('h3', {}, TEXT.details),
             h('dl', {class: 'facts'}, facts.map(([label, text]) => [h('dt', {}, label), h('dd', {}, String(text))]))) : null,
           node.links?.length ? h('nav', {class: 'detail-links', 'aria-label': node.label},
@@ -766,6 +984,7 @@
         const next = shape(data);
         if (next !== signature) {
           signature = next;
+          resizer.disconnect();
           buildProcesses();
           buildInfra();
         } else {
@@ -773,7 +992,7 @@
           for (const node of data.nodes) {
             const element = root.querySelector(`[data-key="${CSS.escape(node.key)}"]`);
             if (!element) continue;
-            if (element.dataset.status !== node.status && element.hasAttribute('data-link')) rewire = true;
+            if (element.dataset.status !== node.status && (element.hasAttribute('data-link') || element.hasAttribute('data-topo'))) rewire = true;
             fill(element, node);
           }
           if (rewire) requestAnimationFrame(draw);
@@ -835,6 +1054,7 @@
 
       document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
       stacked.addEventListener('change', draw);
+      topoStacked.addEventListener('change', draw);
       document.fonts?.ready.then(() => requestAnimationFrame(draw));
 
       let seed = null;
