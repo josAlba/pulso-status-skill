@@ -1,0 +1,13 @@
+{
+  "name": "pulso",
+  "owner": {
+    "name": "josAlba"
+  },
+  "plugins": [
+    {
+      "name": "pulso",
+      "source": "./",
+      "description": "Páginas de estado del sistema que se entienden de un vistazo."
+    }
+  ]
+}

@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<!--
+  Pulso · página de estado a pantalla completa.
+  Plantilla autocontenida (sin dependencias). El servidor solo tiene que:
+    1. Sustituir el contenido de <script id="pulso-seed"> por el JSON inicial
+       (escapando "<" como < para que no pueda cerrar la etiqueta).
+    2. Poner en data-endpoint la URL que devuelve ese mismo JSON.
+  Contrato de datos: references/data-contract.md
+-->
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="color-scheme" content="light dark">
+  <title>Estado del sistema</title>
+  <link rel="icon" id="pulso-favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%239ba7af'/%3E%3C/svg%3E">
+  <style>
+    /* ── Marca: cambia estas variables para adaptarla a cada proyecto ───────── */
+    :root {
+      --font: 'Poppins', 'Avenir Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --glacier: #edf1f3;   /* fondo */
+      --paper: #fbfcfd;     /* tarjetas */
+      --ink: #15232d;       /* texto y núcleo */
+      --muted: #5b6b75;
+      --rule: #d3dbe0;
+      --disc: #15232d;      /* fondo del núcleo */
+      --disc-ink: #fbfcfd;
+      --active: #17935f;
+      --attention: #e3a21a;
+      --attention-ink: #855a00;
+      --off: #9ba7af;
+      --error: #cf3b32;
+      --radius: 10px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --glacier: #0f181e; --paper: #16222a; --ink: #e6edf1; --muted: #93a3ad; --rule: #2a3a44;
+        --disc: #e6edf1; --disc-ink: #0f181e;
+        --active: #2fb87d; --attention: #f0b232; --attention-ink: #f5c45a; --off: #6c7c86; --error: #ef5a50;
+      }
+    }
+    :root[data-theme="dark"] {
+      --glacier: #0f181e; --paper: #16222a; --ink: #e6edf1; --muted: #93a3ad; --rule: #2a3a44;
+      --disc: #e6edf1; --disc-ink: #0f181e;
+      --active: #2fb87d; --attention: #f0b232; --attention-ink: #f5c45a; --off: #6c7c86; --error: #ef5a50;
+    }
+
+    /* ── Tono por estado: todo lo que lleva data-status hereda --tone ─────────── */
+    [data-status] { --tone: var(--active); --tone-ink: var(--active); }
+    [data-status="attention"] { --tone: var(--attention); --tone-ink: var(--attention-ink); }
+    [data-status="off"] { --tone: var(--off); --tone-ink: var(--muted); }
+    [data-status="error"] { --tone: var(--error); --tone-ink: var(--error); }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.45;
+      color: var(--ink);
+      background: var(--glacier);
+      border-top: 8px solid var(--tone);
+      transition: border-color .6s ease;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; color: inherit; }
+    a { color: inherit; }
+    :focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; border-radius: 4px; }
+    .visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+    .board {
+      min-height: calc(100vh - 8px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 20px;
+      padding: clamp(20px, 3vw, 40px) clamp(20px, 4vw, 56px) 24px;
+      max-width: 1480px;
+      margin: 0 auto;
+    }
+
+    /* ── Veredicto ─────────────────────────────────────────────────────────── */
+    .verdict { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 32px; }
+    .verdict h1 { margin: 0; font-size: clamp(2.25rem, 5vw, 4rem); font-weight: 800; line-height: 1.05; letter-spacing: -0.03em; text-wrap: balance; }
+    .verdict-meta { margin: 0; color: var(--muted); text-align: right; font-size: .95rem; }
+    .verdict-meta strong { color: var(--ink); font-weight: 600; }
+    .banner { flex-basis: 100%; margin: 0; padding: 10px 14px; border-left: 4px solid var(--tone); background: var(--paper); }
+    .banner a { font-weight: 600; }
+
+    /* ── Pestañas ──────────────────────────────────────────────────────────── */
+    .tabs { display: flex; flex-wrap: wrap; gap: 0 28px; border-bottom: 1px solid var(--rule); }
+    .tab {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: -1px; padding: 8px 0 11px;
+      border: 0; border-bottom: 3px solid transparent; background: none;
+      color: var(--muted); font-weight: 600; cursor: pointer;
+      transition: color .2s ease, border-color .2s ease;
+    }
+    .tab:hover { color: var(--ink); }
+    .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+    .tab:focus-visible { outline-offset: -2px; }
+    .tab-badge {
+      display: inline-grid; place-items: center;
+      min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+      font-size: .72rem; font-weight: 600; line-height: 1;
+      color: var(--tone-ink); background: color-mix(in srgb, var(--tone) 14%, transparent);
+    }
+    .tab-badge:empty { min-width: 8px; width: 8px; height: 8px; padding: 0; background: var(--tone); }
+    .tab-badge[data-status="off"]:empty { background: transparent; box-shadow: inset 0 0 0 2px var(--off); }
+
+    /* ── Señales y píldoras ────────────────────────────────────────────────── */
+    .signal { position: relative; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--tone); }
+    .card-head > .signal { box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent); }
+    [data-status="off"] > .signal, [data-status="off"] > .card-head > .signal { background: transparent; box-shadow: inset 0 0 0 2px var(--off); }
+    [data-status="working"] > .signal::after, [data-status="working"] > .card-head > .signal::after {
+      content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--tone);
+      animation: ping 1.4s cubic-bezier(0, 0, .2, 1) infinite;
+    }
+    @keyframes ping { 75%, 100% { transform: scale(2.6); opacity: 0; } }
+    .pill {
+      flex: none; padding: 1px 9px; border-radius: 999px;
+      font-size: .72rem; font-weight: 600;
+      color: var(--tone-ink); background: color-mix(in srgb, var(--tone) 13%, transparent);
+    }
+
+    /* ── Tarjetas (procesos e infraestructura) ─────────────────────────────── */
+    .card {
+      position: relative;
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+      padding: 10px 14px 11px;
+      transition: border-color .4s ease, box-shadow .2s ease;
+    }
+    .card:has(.open:hover) { border-color: color-mix(in srgb, var(--ink) 30%, var(--rule)); }
+    .card[data-status="attention"], .card[data-status="error"] { border-color: color-mix(in srgb, var(--tone) 55%, var(--rule)); box-shadow: inset 3px 0 0 var(--tone); }
+    .card[data-status="off"] { background: transparent; border-style: dashed; }
+    .card-head { display: flex; align-items: center; gap: 10px; }
+    .card-name { flex: 1; margin: 0; font-size: .95rem; font-weight: 600; line-height: 1.25; }
+    .card[data-status="off"] .card-name { color: var(--muted); }
+    .card-detail { margin: 2px 0 0 20px; color: var(--muted); font-size: .8rem; line-height: 1.35; }
+    .card[data-status="attention"] .card-detail, .card[data-status="error"] .card-detail { color: var(--tone-ink); }
+    .open { padding: 0; border: 0; background: none; font-weight: inherit; text-align: left; cursor: pointer; }
+    .card-name > .open::after { content: ''; position: absolute; inset: 0; border-radius: var(--radius); }
+    .card-name > .open:focus-visible { outline: none; }
+    .card-name > .open:focus-visible::after { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+    .subs { position: relative; z-index: 1; list-style: none; margin: 8px 0 0 4px; padding: 0 0 0 16px; border-left: 1px solid var(--rule); display: grid; gap: 6px; }
+    .sub { display: grid; grid-template-columns: 10px 1fr; column-gap: 10px; align-items: center; position: relative; }
+    .sub::before { content: ''; position: absolute; left: -16px; top: 50%; width: 12px; border-top: 1px solid var(--rule); }
+    .sub > .signal { width: 8px; height: 8px; margin-left: 1px; }
+    .sub-name { font-size: .82rem; font-weight: 600; line-height: 1.2; justify-self: start; }
+    .sub-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .sub-detail { grid-column: 2; color: var(--muted); font-size: .75rem; line-height: 1.3; }
+    .sub[data-status="attention"] .sub-detail, .sub[data-status="error"] .sub-detail { color: var(--tone-ink); }
+
+    /* ── Pestaña Procesos: esquema con núcleo y cables ─────────────────────── */
+    .map {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(270px, 340px) minmax(220px, 1fr) minmax(270px, 340px);
+      align-content: center;
+      align-items: center;
+      gap: 24px;
+      min-height: 100%;
+    }
+    .side { position: relative; z-index: 1; display: grid; gap: 22px; align-content: center; }
+    .side--left { grid-column: 1; }
+    .side--right { grid-column: 3; }
+    .lane-title { margin: 0 0 10px; font-size: .8rem; font-weight: 600; color: var(--muted); }
+    .lane { display: flex; flex-direction: column; gap: 10px; }
+    .wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    .wire { fill: none; stroke: var(--rule); stroke-width: 1.5; }
+    .wire[data-status="attention"] { stroke: color-mix(in srgb, var(--attention) 45%, var(--rule)); }
+    .wire[data-status="off"] { stroke-dasharray: 3 5; }
+    .wire[data-status="error"] { stroke: color-mix(in srgb, var(--error) 60%, var(--rule)); stroke-dasharray: 6 4; }
+    .spark { fill: var(--active); }
+    .spark[data-status="attention"] { fill: var(--attention); }
+
+    .core { grid-column: 2; grid-row: 1; position: relative; z-index: 1; justify-self: center; display: grid; place-items: center; width: 200px; height: 200px; }
+    .core-disc {
+      position: relative; display: grid; place-content: center; gap: 2px;
+      width: 168px; height: 168px; padding: 0 18px; border-radius: 50%;
+      background: var(--disc); color: var(--disc-ink); text-align: center;
+      box-shadow: 0 0 0 6px var(--glacier), 0 0 0 9px var(--tone);
+      transition: box-shadow .6s ease;
+    }
+    .core-disc::before, .core-disc::after {
+      content: ''; position: absolute; inset: -9px; border-radius: 50%;
+      border: 2px solid var(--tone); opacity: 0;
+      animation: heartbeat 4s ease-out infinite;
+    }
+    .core-disc::after { animation-delay: 2s; }
+    .core[data-status="off"] .core-disc::before, .core[data-status="off"] .core-disc::after { animation: none; }
+    @keyframes heartbeat { 0% { transform: scale(1); opacity: .55; } 70%, 100% { transform: scale(1.35); opacity: 0; } }
+    .core-name { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.01em; line-height: 1.15; }
+    .core-state { font-size: .78rem; color: color-mix(in srgb, var(--disc-ink) 72%, transparent); }
+
+    /* ── Pestaña Infraestructura ───────────────────────────────────────────── */
+    .infra { display: grid; gap: 28px; align-content: start; }
+    .group-title { margin: 0 0 10px; font-size: .8rem; font-weight: 600; color: var(--muted); }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .tile { display: grid; gap: 4px; padding: 12px 16px 14px; }
+    .tile .card-detail { margin-left: 0; }
+    .tile-value { margin: 6px 0 2px; font-size: 1.9rem; font-weight: 800; line-height: 1.05; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+    .tile-unit { margin-left: 6px; font-size: .8rem; font-weight: 600; letter-spacing: 0; color: var(--muted); }
+    .card[data-status="off"] .tile-value { color: var(--muted); }
+    .gauge { height: 6px; margin: 2px 0 4px; border-radius: 999px; background: color-mix(in srgb, var(--rule) 75%, transparent); overflow: hidden; }
+    .gauge > span { display: block; height: 100%; width: var(--fill, 0%); border-radius: inherit; background: var(--tone); transition: width .6s ease, background-color .4s ease; }
+    .trend { display: block; width: 100%; height: 38px; margin-top: 4px; overflow: visible; }
+    .trend .line { fill: none; stroke: var(--tone); stroke-width: 1.6; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    .trend .area { fill: color-mix(in srgb, var(--tone) 12%, transparent); }
+    .trend-label { color: var(--muted); font-size: .72rem; }
+
+    /* ── Pestaña Eventos ───────────────────────────────────────────────────── */
+    .events { list-style: none; margin: 0; padding: 0; max-width: 860px; }
+    .event { display: grid; grid-template-columns: 5.5rem 10px 1fr; gap: 0 16px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+    .event:last-child { border-bottom: 0; }
+    .event time { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+    .event > .signal { align-self: center; }
+    .event-title { margin: 0; font-size: .95rem; font-weight: 600; }
+    .event-title .open:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .event-detail { margin: 2px 0 0; color: var(--muted); font-size: .85rem; }
+    .empty { max-width: 46ch; margin: 8vh auto 0; color: var(--muted); text-align: center; }
+
+    /* ── Leyenda ───────────────────────────────────────────────────────────── */
+    .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: .85rem; }
+    .legend ul { display: flex; flex-wrap: wrap; gap: 8px 20px; list-style: none; margin: 0; padding: 0; }
+    .legend li { display: flex; align-items: center; gap: 8px; }
+    .legend li .signal { width: 9px; height: 9px; }
+    .legend-links { display: flex; gap: 20px; margin-left: auto; }
+    .legend-links a { color: var(--ink); font-weight: 600; }
+
+    /* ── Modal de detalle ──────────────────────────────────────────────────── */
+    .detail {
+      width: min(580px, calc(100vw - 32px));
+      max-height: calc(100dvh - 48px);
+      padding: 0; border: 0; border-top: 6px solid var(--tone); border-radius: 14px;
+      background: var(--paper); color: var(--ink);
+      box-shadow: 0 30px 80px -24px rgb(10 20 28 / .55);
+    }
+    .detail::backdrop { background: rgb(15 24 30 / .42); backdrop-filter: blur(3px); }
+    .detail[open] { animation: rise .24s cubic-bezier(.2, .8, .2, 1); }
+    .detail[open]::backdrop { animation: fade .24s ease; }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+    @keyframes fade { from { opacity: 0; } }
+    .detail-body { display: grid; gap: 18px; padding: 20px 24px 24px; }
+    .detail-body:focus { outline: none; }
+    .detail-head { display: flex; align-items: center; gap: 12px; }
+    .detail-head .signal { width: 12px; height: 12px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 18%, transparent); }
+    .detail-head h2 { flex: 1; margin: 0; font-size: 1.35rem; font-weight: 800; line-height: 1.15; letter-spacing: -0.015em; }
+    .close {
+      display: grid; place-items: center; flex: none;
+      width: 34px; height: 34px; margin-right: -8px; border: 0; border-radius: 50%;
+      background: transparent; color: var(--muted); cursor: pointer;
+    }
+    .close:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+    .detail-lede { margin: -8px 0 0 24px; color: var(--tone-ink); font-weight: 600; }
+    .detail[data-status="active"] .detail-lede, .detail[data-status="working"] .detail-lede { color: var(--muted); }
+    .detail-desc { margin: 0; max-width: 62ch; }
+    .detail-section { display: grid; gap: 8px; }
+    .detail-section > h3 { margin: 0; font-size: .8rem; font-weight: 600; color: var(--muted); }
+    .history { display: flex; gap: 3px; list-style: none; margin: 0; padding: 0; }
+    .history li { flex: 1; height: 24px; border-radius: 3px; background: var(--tone); }
+    .history li[data-status="off"] { background: color-mix(in srgb, var(--off) 35%, transparent); }
+    .history-axis { display: flex; justify-content: space-between; margin: 0; color: var(--muted); font-size: .72rem; }
+    .detail .tile-value { margin: 0; font-size: 2.4rem; }
+    .detail .trend { height: 72px; }
+    .facts { display: grid; grid-template-columns: max-content 1fr; gap: 7px 24px; margin: 0; font-size: .88rem; }
+    .facts dt { color: var(--muted); }
+    .facts dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .detail .subs { margin: 0; }
+    .detail-links { display: flex; flex-wrap: wrap; gap: 8px; }
+    .detail-links a {
+      padding: 7px 14px; border: 1px solid var(--rule); border-radius: 999px;
+      font-size: .85rem; font-weight: 600; text-decoration: none;
+    }
+    .detail-links a:hover { border-color: var(--ink); }
+
+    body.is-offline .panel { opacity: .5; filter: grayscale(1); }
+
+    @media (max-width: 900px) {
+      .map { display: flex; flex-direction: column; align-items: stretch; gap: 22px; }
+      .wires { display: none; }
+      .core { order: -1; align-self: center; width: auto; height: auto; }
+      .core-disc { width: 132px; height: 132px; }
+      .verdict-meta { text-align: left; }
+      .legend-links { margin-left: 0; }
+      .tabs { flex-wrap: nowrap; gap: 0 20px; overflow-x: auto; scrollbar-width: none; }
+      .tab { flex: none; }
+    }
+    @media (max-width: 520px) {
+      .event { grid-template-columns: 10px 1fr; }
+      .event time { grid-column: 2; grid-row: 2; }
+      .event > .signal { grid-row: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body data-status="off">
+  <main class="board" id="pulso" data-endpoint="/status">
+    <header class="verdict">
+      <h1 id="pulso-headline">Comprobando…</h1>
+      <p class="verdict-meta"><strong id="pulso-summary"></strong><br><span id="pulso-checked"></span></p>
+      <p class="banner" id="pulso-banner" role="status" hidden></p>
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Vistas" id="pulso-tabs">
+      <button class="tab" role="tab" id="tab-processes" aria-controls="panel-processes" aria-selected="true">Procesos <span class="tab-badge" data-status="off"></span></button>
+      <button class="tab" role="tab" id="tab-infra" aria-controls="panel-infra" aria-selected="false" tabindex="-1">Infraestructura <span class="tab-badge" data-status="off"></span></button>
+      <button class="tab" role="tab" id="tab-events" aria-controls="panel-events" aria-selected="false" tabindex="-1">Eventos <span class="tab-badge" data-status="off"></span></button>
+    </nav>
+
+    <section class="panel" role="tabpanel" id="panel-processes" aria-labelledby="tab-processes"></section>
+    <section class="panel" role="tabpanel" id="panel-infra" aria-labelledby="tab-infra" hidden></section>
+    <section class="panel" role="tabpanel" id="panel-events" aria-labelledby="tab-events" hidden></section>
+
+    <footer class="legend">
+      <ul id="pulso-legend" aria-label="Leyenda"></ul>
+      <nav class="legend-links" id="pulso-links" aria-label="Enlaces"></nav>
+    </footer>
+    <noscript>Esta página necesita JavaScript para mostrar el estado.</noscript>
+  </main>
+
+  <dialog class="detail" id="pulso-detail" aria-labelledby="pulso-detail-title" closedby="any"></dialog>
+
+  <script type="application/json" id="pulso-seed">null</script>
+  <script>
+    (() => {
+      'use strict';
+
+      /* ── Textos: traduce aquí la página entera ─────────────────────────────── */
+      const TEXT = {
+        statuses: {active: 'Activo', working: 'Trabajando', attention: 'Revisar', off: 'Apagado', error: 'Error'},
+        core: {active: 'Todo en marcha', working: 'Todo en marcha', attention: 'Con avisos', error: 'Con paradas', off: 'Sin datos'},
+        defaultLanes: ['Procesos', 'Servicios'],
+        headline: {
+          ok: 'Todo funciona',
+          stopped: (n) => n === 1 ? 'Hay una pieza parada' : `Hay ${n} piezas paradas`,
+          warnings: (n) => n === 1 ? 'Hay una cosa que revisar' : `Hay ${n} cosas que revisar`,
+        },
+        summary: {
+          ok: (n) => `${n} ${n === 1 ? 'pieza' : 'piezas'} en marcha.`,
+          rest: 'El resto funciona.',
+          moreWarnings: (n) => `Y ${n === 1 ? 'una cosa' : n + ' cosas'} que revisar.`,
+          running: 'Todo sigue en marcha.',
+        },
+        checked: (time, seconds) => `Comprobado a las ${time}. Se actualiza cada ${seconds} segundos.`,
+        title: (headline, service) => `${headline} – Estado de ${service}`,
+        offline: (time) => `No se puede consultar el estado. Los datos son de las ${time}; se vuelve a intentar automáticamente.`,
+        expired: (href) => `La sesión ha caducado. <a href="${href}">Vuelve a iniciar sesión</a> para seguir viendo el estado.`,
+        stale: (minutes) => `Los datos tienen ${minutes} minutos. Puede que el proceso que los genera esté parado.`,
+        since: (relative) => `En este estado desde ${relative}.`,
+        history: 'Últimas comprobaciones',
+        historyAxis: (n) => [`Hace ${n}`, 'Ahora'],
+        of: (max, unit) => `de ${max}${unit ? ' ' + unit : ''}`,
+        parts: 'Partes',
+        details: 'Detalles',
+        close: 'Cerrar',
+        noProcesses: 'No hay procesos que vigilar todavía.',
+        noEvents: 'Sin cambios recientes. Cuando algo cambie de estado aparecerá aquí.',
+      };
+      const TABS = {processes: 'procesos', infra: 'infra', events: 'eventos'};
+      const STATUSES = ['active', 'working', 'attention', 'off', 'error'];
+      const SEVERITY = {active: 0, working: 0, off: 1, attention: 2, error: 3};
+      // Partículas por estado: cuántas viajan por el cable y cuánto tardan en llegar al núcleo.
+      const FLOW = {working: [3, 1.6], active: [1, 3.4], attention: [1, 6]};
+      const SVG = 'http://www.w3.org/2000/svg';
+
+      const root = document.getElementById('pulso');
+      const dialog = document.getElementById('pulso-detail');
+      const banner = document.getElementById('pulso-banner');
+      const lang = document.documentElement.lang || 'es';
+      const timeFormat = new Intl.DateTimeFormat(lang, {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+      const shortTime = new Intl.DateTimeFormat(lang, {hour: '2-digit', minute: '2-digit'});
+      const dayFormat = new Intl.DateTimeFormat(lang, {day: 'numeric', month: 'short'});
+      const numberFormat = new Intl.NumberFormat(lang, {maximumFractionDigits: 1});
+      const relativeFormat = new Intl.RelativeTimeFormat(lang, {numeric: 'auto'});
+      const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const stacked = window.matchMedia('(max-width: 900px)');
+
+      let data = null;
+      let signature = '';
+      let openKey = null;
+      let timer = null;
+      let loading = false;
+
+      /* ── Utilidades DOM ─────────────────────────────────────────────────── */
+      function h(tag, attributes = {}, ...children) {
+        const element = document.createElement(tag);
+        for (const [key, value] of Object.entries(attributes)) {
+          if (value === null || value === undefined || value === false) continue;
+          element.setAttribute(key, value === true ? '' : value);
+        }
+        element.append(...children.flat(Infinity).filter((child) => child !== null && child !== undefined && child !== false));
+        return element;
+      }
+      function s(tag, attributes = {}) {
+        const element = document.createElementNS(SVG, tag);
+        for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
+        return element;
+      }
+      const signal = () => h('span', {class: 'signal', 'aria-hidden': 'true'});
+      const owned = (element, role) => [...element.querySelectorAll(`[data-role="${role}"]`)].find((n) => n.closest('[data-key]') === element);
+      const safeHref = (href) => /^(https?:\/\/|\/|\.|#|\?)/i.test(String(href)) ? String(href) : '#';
+      const ago = (date) => {
+        const seconds = Math.round((date - Date.now()) / 1000);
+        const steps = [[60, 'second'], [3600, 'minute', 60], [86400, 'hour', 3600], [Infinity, 'day', 86400]];
+        for (const [limit, unit, size = 1] of steps) {
+          if (Math.abs(seconds) < limit) return relativeFormat.format(Math.round(seconds / size), unit);
+        }
+        return '';
+      };
+
+      /* ── Datos: normaliza y calcula el veredicto si el servidor no lo trae ─ */
+      function normalize(raw) {
+        const nodes = (raw.nodes || []).map((node) => ({
+          tab: 'processes', parent: null, detail: '', ...node,
+          status: STATUSES.includes(node.status) ? node.status : 'off',
+        }));
+        const top = nodes.filter((n) => !n.parent);
+        const stopped = top.filter((n) => n.status === 'off' || n.status === 'error').length;
+        const warnings = top.filter((n) => n.status === 'attention').length;
+        const status = STATUSES.includes(raw.status) ? raw.status : stopped ? 'error' : warnings ? 'attention' : 'active';
+
+        const lanes = raw.lanes?.length
+          ? raw.lanes.map((lane, i) => ({side: i === 0 ? 'left' : 'right', ...lane}))
+          : [{key: '_left', label: TEXT.defaultLanes[0], side: 'left'}, {key: '_right', label: TEXT.defaultLanes[1], side: 'right'}];
+        const processTop = top.filter((n) => n.tab === 'processes');
+        processTop.forEach((node, i) => {
+          if (lanes.some((lane) => lane.key === node.lane)) return;
+          node.lane = raw.lanes?.length ? lanes.at(-1).key : (i < Math.ceil(processTop.length / 2) ? '_left' : '_right');
+        });
+
+        return {
+          service: raw.service || 'Sistema',
+          status,
+          headline: raw.headline || (stopped ? TEXT.headline.stopped(stopped) : warnings ? TEXT.headline.warnings(warnings) : TEXT.headline.ok),
+          summary: raw.summary || (stopped
+            ? (warnings ? TEXT.summary.moreWarnings(warnings) : TEXT.summary.rest)
+            : warnings ? TEXT.summary.running : TEXT.summary.ok(nodes.length)),
+          checkedAt: raw.checkedAt ? new Date(raw.checkedAt) : new Date(),
+          refreshSeconds: Math.max(2, Number(raw.refreshSeconds) || 10),
+          lanes,
+          nodes,
+          events: Array.isArray(raw.events) ? raw.events : null,
+          links: raw.links || [],
+        };
+      }
+      const byKey = (key) => data?.nodes.find((n) => n.key === key);
+      const childrenOf = (key) => data.nodes.filter((n) => n.parent === key);
+      const shape = (d) => d.nodes.map((n) => [n.key, n.tab, n.lane, n.parent, n.group, !!n.gauge, !!n.series].join('|')).join(';')
+        + '#' + d.lanes.map((l) => l.key + l.side + l.label).join(';');
+
+      /* ── Piezas ─────────────────────────────────────────────────────────── */
+      function card(node, extraClass = '') {
+        const kids = childrenOf(node.key);
+        const element = h('article', {class: `card ${extraClass}`.trim(), 'data-key': node.key, 'data-link': node.tab === 'processes' ? true : null},
+          h('header', {class: 'card-head'},
+            signal(),
+            h('h3', {class: 'card-name'}, h('button', {class: 'open', type: 'button', 'data-open': node.key, 'data-role': 'label'})),
+            h('span', {class: 'pill', 'data-role': 'pill'})),
+          extraClass === 'tile' && node.gauge ? [
+            h('p', {class: 'tile-value'}, h('span', {'data-role': 'value'}), h('span', {class: 'tile-unit', 'data-role': 'unit'})),
+            h('div', {class: 'gauge', 'aria-hidden': 'true'}, h('span', {'data-role': 'gauge'})),
+          ] : null,
+          extraClass === 'tile' && node.series ? [trend(), h('span', {class: 'trend-label', 'data-role': 'trend-label'})] : null,
+          h('p', {class: 'card-detail', 'data-role': 'detail'}),
+          kids.length ? h('ul', {class: 'subs'}, kids.map(sub)) : null);
+        fill(element, node);
+        return element;
+      }
+      function sub(node) {
+        const element = h('li', {class: 'sub', 'data-key': node.key},
+          signal(),
+          h('button', {class: 'open sub-name', type: 'button', 'data-open': node.key, 'data-role': 'label'}),
+          h('span', {class: 'sub-detail'}, h('span', {class: 'visually-hidden', 'data-role': 'pill'}), h('span', {'data-role': 'detail'})));
+        fill(element, node);
+        return element;
+      }
+      function trend() {
+        const svg = s('svg', {class: 'trend', viewBox: '0 0 100 30', preserveAspectRatio: 'none', 'aria-hidden': 'true', 'data-role': 'trend'});
+        svg.append(s('path', {class: 'area'}), s('path', {class: 'line'}));
+        return svg;
+      }
+      function drawTrend(svg, series) {
+        const values = series.map(Number).filter(Number.isFinite);
+        if (values.length < 2) return;
+        const min = Math.min(...values);
+        const span = Math.max(...values) - min || 1;
+        const points = values.map((v, i) => `${(i / (values.length - 1) * 100).toFixed(2)},${(28 - (v - min) / span * 26).toFixed(2)}`);
+        const line = `M${points.join(' L')}`;
+        svg.querySelector('.line').setAttribute('d', line);
+        svg.querySelector('.area').setAttribute('d', `${line} L100,30 L0,30 Z`);
+      }
+      function gaugeParts(gauge) {
+        const unit = gauge.unit || '';
+        const percent = gauge.max ? Math.max(0, Math.min(100, gauge.value / gauge.max * 100)) : null;
+        const label = unit === '%' || gauge.max === undefined ? unit : TEXT.of(numberFormat.format(gauge.max), unit);
+        return {value: numberFormat.format(gauge.value), unit: label, percent};
+      }
+      function fill(element, node) {
+        element.dataset.status = node.status;
+        const set = (role, text) => { const target = owned(element, role); if (target && target.textContent !== text) target.textContent = text; };
+        set('label', node.label);
+        set('pill', TEXT.statuses[node.status]);
+        set('detail', node.detail || '');
+        if (node.gauge) {
+          const parts = gaugeParts(node.gauge);
+          set('value', parts.value);
+          set('unit', parts.unit);
+          owned(element, 'gauge')?.style.setProperty('--fill', `${parts.percent ?? 0}%`);
+        }
+        if (node.series) {
+          const svg = owned(element, 'trend');
+          if (svg) drawTrend(svg, node.series);
+          set('trend-label', node.seriesLabel || '');
+        }
+      }
+
+      /* ── Paneles ────────────────────────────────────────────────────────── */
+      function buildProcesses() {
+        const panel = document.getElementById('panel-processes');
+        const top = data.nodes.filter((n) => n.tab === 'processes' && !n.parent);
+        if (!top.length) { panel.replaceChildren(h('p', {class: 'empty'}, TEXT.noProcesses)); return; }
+        const side = (where) => h('div', {class: `side side--${where}`},
+          data.lanes.filter((lane) => (lane.side === 'left' ? 'left' : 'right') === where).map((lane) => {
+            const items = top.filter((n) => n.lane === lane.key);
+            return items.length ? h('section', {class: 'lane-group', 'aria-label': lane.label},
+              h('h2', {class: 'lane-title'}, lane.label),
+              h('div', {class: 'lane'}, items.map((n) => card(n)))) : null;
+          }));
+        const wires = s('svg', {class: 'wires', id: 'pulso-wires', 'aria-hidden': 'true'});
+        const core = h('div', {class: 'core', 'data-key': '_core'},
+          h('div', {class: 'core-disc'}, h('span', {class: 'core-name', id: 'pulso-core-name'}), h('span', {class: 'core-state', id: 'pulso-core-state'})));
+        const map = h('div', {class: 'map', id: 'pulso-map'}, wires, side('left'), core, side('right'));
+        panel.replaceChildren(map);
+        resizer.disconnect();
+        resizer.observe(map);
+      }
+      function buildInfra() {
+        const panel = document.getElementById('panel-infra');
+        const top = data.nodes.filter((n) => n.tab === 'infra' && !n.parent);
+        const groups = [...new Set(top.map((n) => n.group || ''))];
+        panel.replaceChildren(h('div', {class: 'infra'}, groups.map((group) => h('section', {class: 'group', 'aria-label': group || null},
+          group ? h('h2', {class: 'group-title'}, group) : null,
+          h('div', {class: 'tiles'}, top.filter((n) => (n.group || '') === group).map((n) => card(n, 'tile')))))));
+      }
+      function buildEvents() {
+        const panel = document.getElementById('panel-events');
+        const events = [...(data.events || [])].sort((a, b) => new Date(b.at) - new Date(a.at));
+        if (!events.length) { panel.replaceChildren(h('p', {class: 'empty'}, TEXT.noEvents)); return; }
+        const today = new Date().toDateString();
+        panel.replaceChildren(h('ol', {class: 'events'}, events.map((event) => {
+          const at = new Date(event.at);
+          const label = at.toDateString() === today ? shortTime.format(at) : `${dayFormat.format(at)} ${shortTime.format(at)}`;
+          const status = STATUSES.includes(event.status) ? event.status : 'off';
+          return h('li', {class: 'event', 'data-status': status},
+            h('time', {datetime: at.toISOString()}, label),
+            signal(),
+            h('div', {},
+              h('p', {class: 'event-title'}, byKey(event.node) ? h('button', {class: 'open', type: 'button', 'data-open': event.node}, event.title) : event.title),
+              event.detail ? h('p', {class: 'event-detail'}, event.detail) : null));
+        })));
+      }
+
+      /* ── Cables animados entre las tarjetas de procesos y el núcleo ──────── */
+      function draw() {
+        const map = document.getElementById('pulso-map');
+        const wires = document.getElementById('pulso-wires');
+        if (!map || !wires) return;
+        wires.replaceChildren();
+        if (stacked.matches || map.offsetParent === null) return;
+        const origin = map.getBoundingClientRect();
+        const disc = map.querySelector('.core-disc').getBoundingClientRect();
+        const cx = disc.left + disc.width / 2 - origin.left;
+        const cy = disc.top + disc.height / 2 - origin.top;
+        const radius = disc.width / 2 + 9;
+        map.querySelectorAll('.card[data-link]').forEach((element, index) => {
+          const box = element.getBoundingClientRect();
+          const head = element.querySelector('.card-head').getBoundingClientRect();
+          const fromLeft = box.right < disc.left;
+          const x1 = (fromLeft ? box.right : box.left) - origin.left;
+          const y1 = head.top + head.height / 2 - origin.top;
+          const angle = Math.atan2(Math.max(-1.1, Math.min(1.1, (y1 - cy) / (radius * 1.6))), fromLeft ? -1 : 1);
+          const x2 = cx + Math.cos(angle) * radius;
+          const y2 = cy + Math.sin(angle) * radius;
+          const bend = Math.abs(x2 - x1) * 0.5;
+          const d = `M${x1},${y1} C${x1 + (fromLeft ? bend : -bend)},${y1} ${x2 + (fromLeft ? -bend : bend)},${y2} ${x2},${y2}`;
+          const status = element.dataset.status;
+          const id = `wire-${index}`;
+          wires.append(s('path', {id, d, class: 'wire', 'data-status': status}));
+          const flow = FLOW[status];
+          if (!flow || calm.matches) return;
+          const [count, seconds] = flow;
+          for (let i = 0; i < count; i++) {
+            const spark = s('circle', {r: status === 'working' ? 3 : 2.5, class: 'spark', 'data-status': status});
+            const motion = s('animateMotion', {dur: `${seconds}s`, repeatCount: 'indefinite', begin: `${-((index * 0.37 + i / count) * seconds).toFixed(2)}s`, keyPoints: '0;1', keyTimes: '0;1', calcMode: 'spline', keySplines: '.45 0 .55 1'});
+            motion.append(s('mpath', {href: `#${id}`}));
+            spark.append(motion);
+            wires.append(spark);
+          }
+        });
+      }
+      const resizer = new ResizeObserver(() => requestAnimationFrame(draw));
+
+      /* ── Cabecera, pestañas, leyenda ─────────────────────────────────────── */
+      function setFavicon(status) {
+        const color = getComputedStyle(document.documentElement).getPropertyValue(`--${status === 'working' ? 'active' : status}`).trim() || '#9ba7af';
+        const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="${color}"/></svg>`;
+        document.getElementById('pulso-favicon').href = `data:image/svg+xml,${encodeURIComponent(icon)}`;
+      }
+      function header() {
+        document.body.dataset.status = data.status;
+        document.getElementById('pulso-headline').textContent = data.headline;
+        document.getElementById('pulso-summary').textContent = data.summary;
+        const checked = document.getElementById('pulso-checked');
+        checked.replaceChildren(TEXT.checked(timeFormat.format(data.checkedAt), data.refreshSeconds));
+        document.title = TEXT.title(data.headline, data.service);
+        setFavicon(data.status);
+        const core = root.querySelector('.core');
+        if (core) {
+          core.dataset.status = data.status;
+          document.getElementById('pulso-core-name').textContent = data.service;
+          document.getElementById('pulso-core-state').textContent = TEXT.core[data.status];
+        }
+      }
+      function tabs() {
+        const available = {
+          processes: data.nodes.some((n) => n.tab === 'processes'),
+          infra: data.nodes.some((n) => n.tab === 'infra'),
+          events: data.events !== null,
+        };
+        for (const [id, visible] of Object.entries(available)) {
+          const tab = document.getElementById(`tab-${id}`);
+          tab.hidden = !visible;
+          const badge = tab.querySelector('.tab-badge');
+          if (id === 'events') {
+            // Los eventos son historia, no estado: el contador va en neutro.
+            const recent = (data.events || []).filter((e) => Date.now() - new Date(e.at) < 864e5);
+            badge.dataset.status = 'off';
+            badge.textContent = String(recent.length);
+            badge.hidden = !recent.length;
+            continue;
+          }
+          const nodes = data.nodes.filter((n) => n.tab === id);
+          const issues = nodes.filter((n) => SEVERITY[n.status] > 0);
+          const worst = nodes.reduce((acc, n) => SEVERITY[n.status] > SEVERITY[acc] ? n.status : acc, 'active');
+          badge.dataset.status = worst;
+          badge.textContent = issues.length ? String(issues.length) : '';
+        }
+        document.getElementById('pulso-tabs').hidden = Object.values(available).filter(Boolean).length < 2;
+        const current = document.querySelector('.tab[aria-selected="true"]');
+        if (current?.hidden) select(Object.keys(available).find((id) => available[id]) || 'processes', {history: false});
+      }
+      function legend() {
+        document.getElementById('pulso-legend').replaceChildren(...STATUSES.map((status) =>
+          h('li', {'data-status': status}, signal(), TEXT.statuses[status])));
+        document.getElementById('pulso-links').replaceChildren(...data.links.map((link) =>
+          h('a', {href: safeHref(link.href)}, link.label)));
+      }
+      function select(id, {focus = false, history = true} = {}) {
+        for (const tab of document.querySelectorAll('.tab')) {
+          const active = tab.id === `tab-${id}`;
+          tab.setAttribute('aria-selected', String(active));
+          tab.tabIndex = active ? 0 : -1;
+          document.getElementById(tab.getAttribute('aria-controls')).hidden = !active;
+          if (active && focus) tab.focus();
+        }
+        if (history && location.hash.slice(1).split('/')[0] !== TABS[id]) window.history.replaceState(null, '', `#${TABS[id]}`);
+        if (id === 'processes') requestAnimationFrame(draw);
+      }
+
+      /* ── Modal de detalle ───────────────────────────────────────────────── */
+      function renderDetail(node) {
+        const kids = childrenOf(node.key);
+        const facts = Object.entries(node.facts || {});
+        const history = (node.history || []).filter((status) => STATUSES.includes(status));
+        const value = node.gauge ? gaugeParts(node.gauge) : null;
+        const since = node.since ? new Date(node.since) : null;
+        dialog.dataset.status = node.status;
+        const body = h('div', {class: 'detail-body', 'data-key': node.key, tabindex: '-1'},
+          h('header', {class: 'detail-head'},
+            signal(),
+            h('h2', {id: 'pulso-detail-title'}, node.label),
+            h('span', {class: 'pill'}, TEXT.statuses[node.status]),
+            h('button', {class: 'close', type: 'button', 'aria-label': TEXT.close, 'data-close': true},
+              s('svg', {width: 16, height: 16, viewBox: '0 0 16 16', 'aria-hidden': 'true'}))),
+          node.detail ? h('p', {class: 'detail-lede'}, node.detail) : null,
+          node.description || since ? h('p', {class: 'detail-desc'},
+            [node.description, since ? TEXT.since(ago(since)) : null].filter(Boolean).join(' ')) : null,
+          value ? h('div', {class: 'detail-section'},
+            h('p', {class: 'tile-value'}, value.value, h('span', {class: 'tile-unit'}, value.unit)),
+            value.percent !== null ? h('div', {class: 'gauge', 'aria-hidden': 'true'}, h('span', {style: `--fill:${value.percent}%`})) : null) : null,
+          node.series ? h('div', {class: 'detail-section'},
+            node.seriesLabel ? h('h3', {}, node.seriesLabel) : null, trend()) : null,
+          history.length ? h('div', {class: 'detail-section'},
+            h('h3', {}, TEXT.history),
+            h('ol', {class: 'history'}, history.map((status) => h('li', {'data-status': status, title: TEXT.statuses[status]}))),
+            h('p', {class: 'history-axis', 'aria-hidden': 'true'}, ...TEXT.historyAxis(history.length).map((label) => h('span', {}, label)))) : null,
+          kids.length ? h('div', {class: 'detail-section'}, h('h3', {}, TEXT.parts), h('ul', {class: 'subs'}, kids.map(sub))) : null,
+          facts.length ? h('div', {class: 'detail-section'}, h('h3', {}, TEXT.details),
+            h('dl', {class: 'facts'}, facts.map(([label, text]) => [h('dt', {}, label), h('dd', {}, String(text))]))) : null,
+          node.links?.length ? h('nav', {class: 'detail-links', 'aria-label': node.label},
+            node.links.map((link) => h('a', {href: safeHref(link.href)}, link.label))) : null);
+        const cross = body.querySelector('.close svg');
+        cross.append(s('path', {d: 'M3.5 3.5l9 9m0-9l-9 9', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round'}));
+        if (node.series) drawTrend(body.querySelector('.trend'), node.series);
+        dialog.replaceChildren(body);
+      }
+      function openDetail(key, {history = true} = {}) {
+        const node = byKey(key);
+        if (!node) return;
+        const top = node.parent ? byKey(node.parent) || node : node;
+        openKey = key;
+        renderDetail(node);
+        if (!dialog.open) dialog.showModal();
+        dialog.querySelector('.detail-body').focus();
+        if (history) window.history.pushState(null, '', `#${TABS[top.tab] || TABS.processes}/${encodeURIComponent(key)}`);
+      }
+      dialog.addEventListener('close', () => {
+        openKey = null;
+        const [tab, key] = location.hash.slice(1).split('/');
+        if (key) window.history.replaceState(null, '', `#${tab}`);
+      });
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog || event.target.closest('[data-close]')) dialog.close();
+        const open = event.target.closest('[data-open]');
+        if (open) openDetail(open.dataset.open);
+      });
+
+      /* ── Navegación por hash: #infra, #procesos/clave-de-pieza ───────────── */
+      function fromHash() {
+        const [slug, key] = location.hash.slice(1).split('/');
+        const id = Object.keys(TABS).find((k) => TABS[k] === slug);
+        if (id && !document.getElementById(`tab-${id}`).hidden) select(id, {history: false});
+        if (key && data && byKey(decodeURIComponent(key))) openDetail(decodeURIComponent(key), {history: false});
+        else if (!key && dialog.open) dialog.close();
+      }
+      window.addEventListener('popstate', fromHash);
+      document.getElementById('pulso-tabs').addEventListener('click', (event) => {
+        const tab = event.target.closest('.tab');
+        if (tab) select(tab.id.replace('tab-', ''));
+      });
+      document.getElementById('pulso-tabs').addEventListener('keydown', (event) => {
+        const visible = [...document.querySelectorAll('.tab:not([hidden])')];
+        const index = visible.indexOf(document.activeElement);
+        if (index < 0) return;
+        const next = {ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: visible.length - 1}[event.key];
+        if (next === undefined) return;
+        event.preventDefault();
+        select(visible[(next + visible.length) % visible.length].id.replace('tab-', ''), {focus: true});
+      });
+      root.addEventListener('click', (event) => {
+        const open = event.target.closest('[data-open]');
+        if (open) openDetail(open.dataset.open);
+      });
+
+      /* ── Pintado y refresco ─────────────────────────────────────────────── */
+      function apply(raw) {
+        const previous = data;
+        data = normalize(raw);
+        const next = shape(data);
+        if (next !== signature) {
+          signature = next;
+          buildProcesses();
+          buildInfra();
+        } else {
+          let rewire = false;
+          for (const node of data.nodes) {
+            const element = root.querySelector(`[data-key="${CSS.escape(node.key)}"]`);
+            if (!element) continue;
+            if (element.dataset.status !== node.status && element.hasAttribute('data-link')) rewire = true;
+            fill(element, node);
+          }
+          if (rewire) requestAnimationFrame(draw);
+        }
+        buildEvents();
+        header();
+        tabs();
+        legend();
+        if (!previous) { fromHash(); requestAnimationFrame(draw); }
+        if (openKey && dialog.open) {
+          const focused = dialog.contains(document.activeElement);
+          if (byKey(openKey)) renderDetail(byKey(openKey)); else dialog.close();
+          if (focused && dialog.open) dialog.querySelector('.detail-body').focus();
+        }
+        const age = (Date.now() - data.checkedAt) / 1000;
+        if (age > Math.max(60, data.refreshSeconds * 3)) showBanner('attention', TEXT.stale(Math.round(age / 60)));
+        else banner.hidden = true;
+      }
+      function showBanner(status, message, html = false) {
+        banner.dataset.status = status;
+        banner[html ? 'innerHTML' : 'textContent'] = message;
+        banner.hidden = false;
+      }
+      function offline(message, html = false) {
+        document.body.classList.add('is-offline');
+        document.body.dataset.status = 'off';
+        const state = document.getElementById('pulso-core-state');
+        if (state) state.textContent = TEXT.core.off;
+        root.querySelector('.core')?.setAttribute('data-status', 'off');
+        document.title = TEXT.title(TEXT.core.off, data?.service || 'Sistema');
+        setFavicon('off');
+        showBanner('error', message, html);
+      }
+      async function refresh() {
+        const endpoint = root.dataset.endpoint;
+        if (!endpoint || document.hidden || loading) return schedule();
+        loading = true;
+        try {
+          const response = await fetch(endpoint, {cache: 'no-store', credentials: 'same-origin', headers: {Accept: 'application/json'}});
+          const json = (response.headers.get('Content-Type') || '').includes('json');
+          if (response.redirected || response.status === 401 || response.status === 403 || (response.ok && !json)) {
+            offline(TEXT.expired(location.pathname), true);
+            return;
+          }
+          if (!response.ok) throw new Error(String(response.status));
+          document.body.classList.remove('is-offline');
+          apply(await response.json());
+        } catch (_) {
+          offline(TEXT.offline(data ? timeFormat.format(data.checkedAt) : '--:--'));
+        } finally {
+          loading = false;
+          schedule();
+        }
+      }
+      function schedule() {
+        clearTimeout(timer);
+        if (root.dataset.endpoint) timer = setTimeout(refresh, (data?.refreshSeconds || 10) * 1000);
+      }
+
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+      stacked.addEventListener('change', draw);
+      document.fonts?.ready.then(() => requestAnimationFrame(draw));
+
+      let seed = null;
+      try { seed = JSON.parse(document.getElementById('pulso-seed').textContent); } catch (_) { seed = null; }
+      if (seed) { apply(seed); schedule(); } else { refresh(); }
+    })();
+  </script>
+</body>
+</html>

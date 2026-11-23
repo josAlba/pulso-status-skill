@@ -1,0 +1,9 @@
+{
+  "name": "pulso",
+  "description": "Skill para crear páginas de estado del sistema a pantalla completa: veredicto, esquema animado de procesos, infraestructura, eventos y modales de detalle. Para cualquier backend.",
+  "version": "1.0.0",
+  "author": {
+    "name": "josAlba"
+  },
+  "keywords": ["status-page", "health", "monitoring", "dashboard", "skill"]
+}
