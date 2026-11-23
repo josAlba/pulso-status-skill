@@ -10,6 +10,25 @@ que corre de verdad (workers, colas, cron, base de datos, caché, servicios exte
 decide cómo se calcula cada estado en el backend y conecta una página a pantalla
 completa ya diseñada y probada.
 
+## Instalación
+
+Con [skills.sh](https://skills.sh), desde la carpeta de tu proyecto:
+
+```bash
+npx skills add josAlba/pulso-status-skill --skill pulso -a claude-code
+```
+
+Para tenerla en todos tus proyectos (en `~/.claude/skills/pulso`), añade `-g`:
+
+```bash
+npx skills add josAlba/pulso-status-skill --skill pulso -a claude-code -g
+```
+
+Necesita Node 22.20 o posterior. Sin `-a claude-code` te pregunta en qué agentes
+instalarla (Codex, Cursor…). Después, en Claude Code, pide «Hazme una página de estado
+del sistema». Si prefieres clonar el repositorio o instalarla como plugin, mira
+[otras formas de instalarla](#otras-formas-de-instalarla).
+
 ![Pestaña Procesos: todo funciona](docs/screenshots/procesos.jpg)
 
 ## Qué incluye la página
@@ -64,26 +83,7 @@ segundos. Otros escenarios:
 | `/?theme=dark` | Fuerza el modo oscuro (se combina con los anteriores) |
 | `#infra/gateway` | Abre directamente una pestaña y un modal |
 
-## Instalación
-
-### Con skills.sh (la forma más rápida)
-
-Con el CLI de [skills.sh](https://skills.sh) (necesita Node 22.20 o posterior), desde la
-carpeta de tu proyecto:
-
-```bash
-npx skills add josAlba/pulso-status-skill --skill pulso -a claude-code
-```
-
-Deja la skill en `.claude/skills/pulso` del proyecto. Añade `-g` para instalarla para
-todos tus proyectos (en `~/.claude/skills/pulso`):
-
-```bash
-npx skills add josAlba/pulso-status-skill --skill pulso -a claude-code -g
-```
-
-Sin `-a claude-code` te pregunta en qué agentes instalarla (Codex, Cursor, etc.); con `-y`
-no hace ninguna pregunta.
+## Otras formas de instalarla
 
 ### Con el script del repositorio (todos tus proyectos)
 
