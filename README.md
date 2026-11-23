@@ -65,7 +65,7 @@ segundos. Otros escenarios:
 ### Como skill personal (todos tus proyectos)
 
 ```bash
-git clone <url-de-este-repo> ~/Documents/GitHub/pulso-status-skill
+git clone https://github.com/josAlba/pulso-status-skill.git ~/Documents/GitHub/pulso-status-skill
 ```
 
 ```bash
@@ -86,10 +86,10 @@ Deja la skill en `/ruta/al/proyecto/.claude/skills/pulso` para versionarla con e
 ### Como plugin
 
 El repositorio también es un plugin y un marketplace de Claude Code
-(`.claude-plugin/`). Una vez publicado en GitHub:
+(`.claude-plugin/`):
 
 ```text
-/plugin marketplace add <usuario>/pulso-status-skill
+/plugin marketplace add josAlba/pulso-status-skill
 /plugin install pulso@pulso
 ```
 
