@@ -1,100 +1,101 @@
-# Sistema visual
+# Visual system
 
-Pulso está pensada para mirarse de reojo, a varios metros o en mitad de una
-incidencia. Cada decisión de diseño sirve para eso.
+Pulso is meant to be glanced at: from across the room, or in the middle of an incident.
+Every design decision serves that.
 
-## Lo que sostiene la página (no lo cambies)
+## What holds the page together (don't change it)
 
-1. **El veredicto es lo primero.** Una frase en lenguaje llano, enorme (hasta 4 rem,
-   peso 800). Responde «¿funciona todo?» antes de que nadie lea una tarjeta.
-2. **Un solo color de estado domina.** La franja superior de 8 px, el anillo del
-   núcleo, el favicon y el título de la pestaña cambian a la vez con el veredicto. Se
-   ve el estado aunque la pestaña esté en segundo plano.
-3. **El color nunca va solo.** Cada estado tiene también forma y texto: `off` usa
-   punto hueco y borde discontinuo; `error`, cable discontinuo rojo y barra lateral;
-   todas las píldoras dicen el estado con palabras.
-4. **El movimiento significa algo.** Las partículas solo viajan por cables de piezas
-   vivas: rápidas y numerosas si `working`, lentas si `attention`, ninguna si `off` o
-   `error`. El núcleo late despacio. Nada más se mueve sin que el usuario actúe.
-   Con `prefers-reduced-motion` todo queda quieto.
-5. **El detalle está a un clic, nunca en la vista principal.** Las tarjetas dicen una
-   sola frase. Descripción, historial, tendencias, datos y enlaces van al modal.
-   Excepción: las tarjetas del mapa de infraestructura explican la arquitectura, así
-   que llevan la descripción (dos líneas como mucho) y hasta cuatro datos. Historial,
-   tendencia y enlaces siguen en el modal.
-6. **Superficies neutras.** Fondo glaciar frío, tarjetas casi blancas, una sola sombra
-   (la del modal). Así el color de estado es lo único que destaca.
+1. **The verdict comes first.** One plain-language sentence, huge (up to 4 rem, weight
+   800). It answers "is everything working?" before anyone reads a card.
+2. **One status colour dominates.** The 8 px top strip, the core ring, the favicon and
+   the tab title all change together with the verdict. The status shows even when the
+   tab is in the background.
+3. **Colour never works alone.** Every status also has a shape and a word: `off` uses a
+   hollow dot and a dashed border; `error`, a dashed red wire and a side bar; every pill
+   names the status.
+4. **Motion means something.** Sparks only travel along wires of live components: fast
+   and many when `working`, slow when `attention`, none when `off` or `error`. The core
+   beats slowly. Nothing else moves unless the user acts. With
+   `prefers-reduced-motion`, everything stays still.
+5. **Detail is one click away, never on the main view.** Cards say a single sentence.
+   Description, history, trends, facts and links live in the modal. Exception: the
+   infrastructure map explains the architecture, so its cards carry the description (two
+   lines at most) and up to four facts. History, trend and links stay in the modal.
+6. **Neutral surfaces.** Cool glacier background, near-white cards, a single shadow (the
+   modal's). That way the status colour is the only thing that stands out.
 
-## Lo que se adapta a cada proyecto
+## What adapts to each project
 
-Todas las variables están al principio del `<style>`:
+All variables are at the top of the `<style>` block:
 
-| Variable | Uso | Consejo |
+| Variable | Used for | Advice |
 |---|---|---|
-| `--font` | Toda la página | La tipografía de la marca, si tiene una sans con peso 800 para el veredicto. Si es una serif, úsala solo en `h1`. |
-| `--glacier`, `--paper`, `--ink`, `--muted`, `--rule` | Superficies y texto | Neutros fríos o cálidos según la marca. Mantén el contraste AA de `--muted` sobre `--glacier`. |
-| `--disc`, `--disc-ink` | Núcleo | Por defecto, el color de tinta. Puede ser el color principal de la marca si es oscuro. |
-| `--active`, `--attention`, `--off`, `--error` | Estados | Ajusta el tono, no el significado: verde, ámbar, gris, rojo. |
-| `--attention-ink` | Texto ámbar | El ámbar puro no llega al contraste AA como texto. |
-| `--radius` | Tarjetas | 6–14 px. |
+| `--font` | The whole page | The brand font, if it has a sans with an 800 weight for the verdict. If it is a serif, use it on `h1` only. |
+| `--glacier`, `--paper`, `--ink`, `--muted`, `--rule` | Surfaces and text | Cool or warm neutrals to match the brand. Keep `--muted` on `--glacier` at AA contrast. |
+| `--disc`, `--disc-ink` | The core | Ink colour by default. Can be the brand's primary colour if it is dark. |
+| `--active`, `--attention`, `--off`, `--error` | Statuses | Adjust the hue, not the meaning: green, amber, grey, red. |
+| `--attention-ink` | Amber text | Pure amber doesn't reach AA contrast as text. |
+| `--radius` | Cards | 6–14 px. |
 
-Hay un bloque equivalente para el modo oscuro (`prefers-color-scheme` y
-`data-theme="dark"` en `<html>` para forzarlo, útil en pantallas de oficina).
+There is an equivalent block for dark mode (`prefers-color-scheme`, plus
+`data-theme="dark"` on `<html>` to force it, handy for office screens).
 
-### Fuentes
+### Fonts
 
-La plantilla no descarga fuentes: usa `Poppins` si la página la tiene cargada y, si no,
-la del sistema. Para usar la de la marca, añade su `@font-face` (servida por el propio
-proyecto, con `font-display: swap`) y ponla primera en `--font`.
+The template downloads no fonts: it uses `Poppins` if the page already loads it, and the
+system font otherwise. To use the brand's font, add its `@font-face` (served by the
+project itself, with `font-display: swap`) and put it first in `--font`.
 
-### Textos e idioma
+### Copy and language
 
-El objeto `TEXT` del script contiene todas las frases, con plurales. Para otro idioma,
-tradúcelo y cambia `lang` en `<html>`: fechas, horas y números usan `Intl` con ese idioma.
-Las etiquetas de la pestaña y el aviso `noscript` están en el HTML.
+All of the page's own copy lives in the `I18N` object in the script, one dictionary per
+language, with plurals. The page picks one from `<html lang>` (`en`, `es`, or a regional
+variant such as `es-MX`) and falls back to English. Dates, times and numbers use `Intl`
+with the same language. To add a language, copy the `en` dictionary, translate it and
+set `lang`. Tab labels and aria labels are filled in from the dictionary too; only the
+`noscript` notice is plain HTML.
 
-## Composición
+## Layout
 
 ```
-┌──────────────────────────────────────────────────────────────┐ ← franja de estado
-│ Todo funciona                         13 piezas en marcha.   │
-│                                       Comprobado a las…      │
-│ Procesos •   Infraestructura •   Eventos 2                   │
+┌──────────────────────────────────────────────────────────────┐ ← status strip
+│ All systems go                       13 components running.  │
+│                                      Checked at…             │
+│ Processes •   Infrastructure •   Events 2                    │
 │ ─────────────────────────────────────────────────────────────│
-│ Carril izq.           ╭─────╮            Carril dcho.        │
-│ [tarjeta]─────╮       │núcleo│      ╭────[tarjeta]           │
-│ [tarjeta]─────┼──────▶│     │◀─────┼────[tarjeta]           │
-│ [tarjeta]─────╯       ╰─────╯      ╰────[tarjeta]           │
+│ Left lane             ╭─────╮            Right lane          │
+│ [card]────────╮       │core │      ╭────[card]               │
+│ [card]────────┼──────▶│     │◀─────┼────[card]               │
+│ [card]────────╯       ╰─────╯      ╰────[card]               │
 │ ─────────────────────────────────────────────────────────────│
-│ • Activo • Trabajando • Revisar ○ Apagado • Error   Enlaces  │
+│ • Active • Working • Check ○ Off • Error              Links  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- Por debajo de 900 px el esquema pasa a una columna con el núcleo arriba y sin cables.
-- Las pestañas solo aparecen si hay más de una con contenido. Su contador indica las
-  piezas con problemas y toma el color de la peor.
-- Infraestructura: si hay conexiones (`connects`), primero el mapa: una columna por
-  paso del recorrido de una petición, piezas centradas en vertical y cables curvos
-  que salen del lateral de la tarjeta, repartidos para no salir del mismo punto. Por
-  debajo de 1100 px las columnas se apilan y los cables desaparecen (las conexiones
-  siguen en el modal). Después, rejilla automática de tarjetas de 260 px o más,
-  agrupadas, para las piezas sin conexiones.
-- Los iconos del mapa están en `ICONS`, en el script: trazo de 1,7 px sobre 24×24.
-  Añade los que falten con el mismo estilo; un nombre desconocido muestra el punto de estado.
-- Eventos: línea de tiempo de hasta 860 px de ancho.
+- Below 900 px the diagram becomes one column with the core on top and no wires.
+- Tabs only appear if more than one has content. Their counter shows the components with
+  problems and takes the colour of the worst one.
+- Infrastructure: if there are connections (`connects`), the map comes first: one column
+  per step of a request, cards centred vertically, curved wires leaving from the side of
+  the card and spread out so they never share an anchor. Below 1100 px the columns stack
+  and the wires disappear (connections are still listed in the modal). After the map, an
+  auto grid of cards 260 px or wider, grouped, for components without connections.
+- Map icons live in `ICONS` in the script: 1.7 px stroke on 24×24. Add any you need in
+  the same style; an unknown name shows the status dot instead.
+- Events: a timeline up to 860 px wide.
 
-## Accesibilidad
+## Accessibility
 
-- Pestañas con `role="tablist"`, flechas, Inicio y Fin.
-- Cada tarjeta es un botón (el nombre se extiende a toda la tarjeta); las subpiezas
-  son botones propios.
-- Modal con `<dialog>` nativo: atrapa el foco, se cierra con Esc, con la X o pulsando
-  fuera, y devuelve el foco al cerrar.
-- El estado se anuncia en texto (píldoras, oculto en las subpiezas) y el aviso de
-  conexión usa `role="status"`.
+- Tabs use `role="tablist"`, with arrow keys, Home and End.
+- Each card is a button (its name stretches over the whole card); sub-components are
+  buttons of their own.
+- The modal is a native `<dialog>`: it traps focus, closes with Esc, the X or a click
+  outside, and returns focus when it closes.
+- Status is always announced in text (pills, visually hidden in sub-components) and the
+  connection banner uses `role="status"`.
 
-## Ideas de extensión (solo si se piden)
+## Extension ideas (only when asked)
 
-- **Modo pantalla**: con `?pantalla`, ocultar el pie y rotar las pestañas cada 20 s.
-- **Sonido o notificación** al pasar a `error` (con permiso explícito del usuario).
-- **Página pública** para clientes: otra plantilla, sin `facts` ni detalles internos.
+- **Wall-screen mode**: with `?screen`, hide the footer and rotate the tabs every 20 s.
+- **Sound or notification** when something turns `error` (with the user's explicit permission).
+- **Public page** for customers: a separate template, without `facts` or internal detail.

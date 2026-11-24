@@ -7,7 +7,7 @@
     {
       "name": "pulso",
       "source": "./",
-      "description": "Páginas de estado del sistema que se entienden de un vistazo."
+      "description": "System status pages you can read at a glance."
     }
   ]
 }

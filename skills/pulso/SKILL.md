@@ -1,116 +1,158 @@
 ---
 name: pulso
-description: Crea una página de estado del sistema (status page, health page, /system/health, /status) a pantalla completa para el panel de administración de cualquier proyecto web, con veredicto en grande, esquema animado de procesos alrededor de un núcleo, pestaña de infraestructura con medidores y tendencias, pestaña de eventos, modales de detalle enlazables, refresco automático y modo oscuro. Úsala cuando pidan una página de salud o estado, un monitor de procesos, workers, colas, cron o servicios, un panel para dejar abierto en una pantalla o "algo como /system/health". Funciona con cualquier backend (Symfony, Laravel, Django, Rails, Express, Next.js, Go…) porque la página es HTML autocontenido que consume un JSON.
+description: Builds a full-screen system status page (health page, /status, /system/health, ops dashboard) for the admin area of any web project. A huge plain-language verdict, an animated diagram of workers, queues and cron around a core, an infrastructure map with gauges and trends, an event timeline, linkable detail modals, auto-refresh and dark mode. Use it when someone asks for a status or health page, a monitor for workers, queues, cron jobs or external services, a screen to leave open in the office, or "something like /system/health". Works with any backend (Symfony, Laravel, Django, Rails, Express, Next.js, Go…) because the page is one self-contained HTML file that renders a JSON document.
 ---
 
-# Pulso: páginas de estado que se entienden de un vistazo
+# Pulso: status pages you can read at a glance
 
-Pulso da a cualquier proyecto una página de estado pensada para dejarla abierta en
-otra pestaña o en una pantalla. Responde primero a la pregunta «¿funciona todo?» con
-una frase grande, y deja el detalle a un clic.
+Pulso gives any project a status page meant to stay open in a spare tab or on a wall
+screen. It answers "is everything working?" with one big sentence first, and keeps the
+detail one click away.
 
-| Pieza | Fichero |
+The page only paints. Every decision about what is healthy lives in the backend, in a
+small pure function the project tests like any other code.
+
+## What ships with the skill
+
+| Piece | File |
 |---|---|
-| Plantilla HTML/CSS/JS autocontenida, sin dependencias | `assets/status-page.html` |
-| Servidor de demo y adaptador de referencia (Node, sin dependencias) | `scripts/demo-server.mjs` |
-| Contrato JSON entre backend y página | `references/data-contract.md` |
-| Qué vigilar y cómo decidir cada estado | `references/collectors.md` |
-| Cómo conectarla en cada framework | `references/adapters.md` |
-| Sistema visual, cómo adaptarlo a la marca y qué no tocar | `references/design.md` |
+| Self-contained HTML/CSS/JS template, no dependencies, English and Spanish built in | `assets/status-page.html` |
+| Demo server and reference adapter (Node, no dependencies) | `scripts/demo-server.mjs` |
+| JSON contract between backend and page | `references/data-contract.md` |
+| What to watch and how to decide each status | `references/collectors.md` |
+| Wiring it into each framework | `references/adapters.md` |
+| Visual system: what to adapt and what to leave alone | `references/design.md` |
 
-## Flujo de trabajo
+Read a reference when its step comes up, not all of them up front.
 
-Sigue estos pasos en orden. Si el proyecto tiene sus propias reglas de arquitectura
-(AGENTS.md, CLAUDE.md, capas DDD, convenciones de rutas o permisos), mandan esas
-reglas: Pulso solo define la página y el contrato de datos.
+## When to use it, and when not
 
-### 1. Haz inventario de lo que corre de verdad
+Use it for an **internal** page that tells the team whether the system is working:
+workers, queues, schedulers, databases, caches, disks and third-party services.
 
-Antes de escribir código, averigua qué piezas tiene el sistema. No te las inventes:
-léelas del proyecto.
+Don't use it for a **public** status page for customers (incident history, uptime
+percentages, subscriptions), for metrics exploration (that belongs in Grafana or
+similar) or for alerting. If the project already has one of those and the user wants a
+glanceable view on top, Pulso can read from it.
 
-- **Procesos**: workers y consumidores de colas (Messenger, Horizon, Celery, Sidekiq,
-  BullMQ…), programador o cron, daemons. Búscalos en `docker-compose*.yml`,
-  `supervisord.conf`, `Procfile`, unidades systemd, manifiestos de Kubernetes,
-  `package.json`, `composer.json` y la configuración de colas.
-- **Infraestructura**: base de datos, caché, disco, CPU, memoria, almacenamiento
-  de ficheros y servicios externos (pasarela de pago, correo, CDN, APIs).
-- **Lo que ya existe**: endpoints de health, comandos de monitorización, tablas de
-  latidos (heartbeats), métricas. Reutilízalos antes de crear nada nuevo.
+## Workflow
 
-- **Conexiones**: qué llama a qué en una petición normal (proxy o servidor web →
-  aplicación → base de datos, caché, colas). Sácalo de la configuración del servidor
-  web, de `docker-compose*.yml` y de las variables de conexión. Con ello se dibuja el
-  mapa de infraestructura (`connects` en el contrato).
+Follow the steps in order. If the project has its own rules (AGENTS.md, CLAUDE.md,
+layered architecture, route or permission conventions), they win: Pulso only defines
+the page and the data contract.
 
-Presenta al usuario la lista de piezas que vas a vigilar, agrupadas en procesos
-(carril izquierdo y derecho) e infraestructura (el mapa de conexiones y los grupos). Si hay dudas sobre qué
-incluir, pregunta antes de seguir.
+### 1. Inventory what actually runs
 
-### 2. Decide cómo se calcula cada estado (en el backend)
+Before writing code, find out which components the system has. Read them from the
+project; never invent them.
 
-Lee `references/collectors.md`. Para cada pieza define:
+- **Processes**: workers and queue consumers (Messenger, Horizon, Celery, Sidekiq,
+  BullMQ…), the scheduler or cron, daemons. Look in `docker-compose*.yml`,
+  `supervisord.conf`, `Procfile`, systemd units, Kubernetes manifests, `package.json`,
+  `composer.json` and the queue configuration.
+- **Infrastructure**: database, cache, disk, CPU, memory, file storage and external
+  services (payment gateway, email, CDN, APIs).
+- **Connections**: what calls what during a normal request (proxy or web server →
+  application → database, cache, queues). Take it from the web server config,
+  `docker-compose*.yml` and the connection environment variables. This becomes the
+  infrastructure map (`connects` in the contract).
+- **What already exists**: health endpoints, monitoring commands, heartbeat tables,
+  metrics exporters. Reuse them before building anything new.
 
-- la fuente de la señal (latido, consulta, ping, métrica);
-- los umbrales de `attention` y `error`, y cuándo pasa a `off`;
-- el texto de `detail`, escrito para quien mira la página, no para quien la programó
-  («Sin señal desde las 16:42», no «heartbeat_ts < now-300»).
+**Checkpoint.** Show the user the list you intend to watch, grouped as processes (left
+and right lane), the infrastructure map and the remaining infrastructure groups. Ask
+before going on if anything is unclear: what to include, who may see the page, and
+which language the page should speak.
 
-La verdad vive en el servidor: la página solo pinta. Escribe esta lógica como una
-clase pura y testeable (un «evaluador» que recibe lecturas y devuelve el JSON del
-contrato) y cúbrela con tests unitarios para cada transición de estado.
+### 2. Decide how each status is computed (in the backend)
 
-### 3. Expón dos rutas protegidas
+Read `references/collectors.md`. For each component define:
 
-1. **Página** (`GET /admin/system/health` o la ruta que siga la convención del
-   proyecto): sirve `assets/status-page.html` con el JSON inicial inyectado en
-   `<script id="pulso-seed">` y `data-endpoint` apuntando a la ruta JSON.
-2. **JSON** (`GET …/health/status`): devuelve el mismo documento.
+- the signal source (heartbeat, query, ping, metric) and its timeout;
+- the thresholds for `attention` and `error`, and when it becomes `off`;
+- the `detail` text, written for the person looking at the page, not for the person who
+  wrote the check ("No signal since 16:42", not "heartbeat_ts < now-300").
 
-Ambas exigen sesión de administrador y responden con `Cache-Control: private, no-store`.
-La página lleva `noindex`. Cuando la sesión caduca, el JSON debe responder 401/403 o
-redirigir al login: la página lo detecta y lo explica. Ejemplos por framework en
-`references/adapters.md`.
+Write this as a pure, testable unit (an **assessor** that takes readings and returns the
+contract document) and cover every state transition with unit tests. Gathering the
+readings (I/O) stays outside it, so the tests need no database or network.
 
-Al inyectar la semilla, escapa `<` como `<` (o usa la función de tu framework
-que lo hace, como `JSON_HEX_TAG` en PHP) para que el JSON no pueda cerrar la etiqueta.
+### 3. Expose two protected routes
 
-### 4. Adapta la plantilla
+1. **Page** (`GET /admin/system/health`, or whatever fits the project's conventions):
+   serves the template with the initial JSON injected into `<script id="pulso-seed">`
+   and `data-endpoint` pointing at the JSON route.
+2. **JSON** (`GET …/health/status`): returns the same document.
 
-Copia `assets/status-page.html` al proyecto (como plantilla del motor que use:
-Twig, Blade, Jinja, ERB, JSX…) y ajusta solo lo previsto:
+Both require an admin session and respond with `Cache-Control: private, no-store`. The
+page carries `noindex`. When the session expires the JSON route must answer 401/403 or
+redirect to the login page: the page detects it and says so. Per-framework examples are
+in `references/adapters.md`.
 
-- **Variables de marca** en `:root` (tipografía, colores base, radio). Usa la
-  tipografía y los colores del proyecto si existen; mantén la semántica de colores
-  de estado (verde, ámbar, gris, rojo).
-- **Textos** en el objeto `TEXT` del script, y `lang` en `<html>`, para otro idioma.
-- **Enlaces** del pie (`links` en el JSON), por ejemplo a la página de colas o a los logs.
+When injecting the seed, escape `<` as `<` (or use the framework helper that does,
+such as `JSON_HEX_TAG` in PHP or `json_script` in Django) so the JSON can never close
+the `<script>` tag.
 
-No reescribas el esquema ni el modal: lee `references/design.md` para saber qué
-decisiones de diseño sostienen la página y cuáles se pueden cambiar.
+### 4. Adapt the template
 
-### 5. Comprueba que funciona
+Copy `assets/status-page.html` into the project as a template for its engine (Twig,
+Blade, Jinja, ERB, a route handler…) and change only what is meant to change:
 
-- Previsualiza tu JSON real o de prueba con la plantilla sin levantar el proyecto:
-  `node scripts/demo-server.mjs --template ruta/a/plantilla.html --data estado.json`.
-  Con `--data` no hay semilla dinámica: úsalo para revisar el diseño.
-- Revisa los escenarios de la demo (`?scenario=ok`, `ko`, `live`, `empty`) y el tema
-  oscuro (`?theme=dark`) para comparar.
-- En el proyecto, verifica: todo bien, una pieza en `attention`, una en `off`, una en
-  `error`, el backend caído (aviso de conexión), la sesión caducada (aviso con enlace
-  al login), móvil (columna única) y `prefers-reduced-motion`.
-- Abre un modal y comprueba que la URL cambia (`#procesos/clave`) y que al recargar
-  se abre el mismo detalle.
-- Tests: unitarios del evaluador, funcionales de las dos rutas (200 con permisos,
-  redirección o 401/403 sin ellos, `Content-Type: application/json` en la ruta JSON).
+- **Language**: set `<html lang>`. `en` and `es` are built in; for another language add
+  a dictionary to `I18N` in the script. Dates, times and numbers follow `lang`.
+- **Brand variables** in `:root` (font, neutral colours, radius). Use the project's font
+  and neutrals if it has them; keep the meaning of the status colours (green, amber,
+  grey, red).
+- **Footer links** (`links` in the JSON), for example to the queue dashboard or the logs.
 
-## Reglas
+Don't rewrite the diagram, the map or the modal. `references/design.md` explains which
+design decisions hold the page together and which ones are yours to change.
 
-- La página nunca consulta la base de datos ni servicios por su cuenta: solo pinta el JSON.
-- Las claves (`key`) son estables entre refrescos. Si cambian las piezas, la página
-  se reconstruye sola, pero conviene no renombrarlas.
-- `detail` es una frase corta de estado. Lo largo va en `description`, que solo
-  aparece en el modal.
-- No metas secretos en `facts`: ni DSN con contraseñas, ni tokens, ni datos personales.
-- Mantén el refresco en 10 s o más en producción. Si medir algo es caro, cachea
-  la lectura en el servidor.
+### 5. Verify every state
+
+- Preview real or sample JSON with the template, without booting the project:
+  `node scripts/demo-server.mjs --template path/to/template.html --data status.json`.
+- Compare with the demo scenarios (`?scenario=ok`, `ko`, `live`, `empty`), dark mode
+  (`?theme=dark`) and the language switch (`?lang=es`).
+- In the project, check: all healthy, one component in `attention`, one `off`, one
+  `error`, the backend down (connection banner), an expired session (banner with a
+  sign-in link), mobile (single column) and `prefers-reduced-motion`.
+- Open a modal and check that the URL changes (`#processes/<key>`) and that reloading
+  opens the same detail.
+- Tests: assessor unit tests, plus functional tests for both routes (200 with
+  permission, redirect or 401/403 without, `Content-Type: application/json` on the JSON
+  route).
+
+## Definition of done
+
+- [ ] Every component on the page exists in the project, and nothing important is missing.
+- [ ] The assessor is pure and has a test per state transition.
+- [ ] Both routes are admin-only, `private, no-store`, and the page is `noindex`.
+- [ ] The seed is escaped; the page renders before the first refresh.
+- [ ] `detail` texts read like sentences a colleague would say out loud.
+- [ ] No secrets or personal data in `facts`, `description` or `links`.
+- [ ] Healthy, warning, down, offline and expired-session states were seen in a browser.
+
+## Rules
+
+- The page never queries the database or services itself: it only renders the JSON.
+- `key` values stay stable between refreshes. If the set of components changes, the
+  page rebuilds itself, but avoid renaming keys (shared links use them).
+- `detail` is one short status sentence. Longer text goes in `description`, which only
+  appears in the modal.
+- Never put secrets in `facts`: no DSNs with passwords, tokens or personal data.
+- Keep the refresh at 10 s or more in production. If a reading is expensive, cache it on
+  the server or measure it in a background job.
+
+## Common mistakes
+
+- **Reporting `active` when there is no data.** Absence of signal is `off` until proven
+  otherwise.
+- **Letting a hung check hang the page.** Every probe has a 1–2 s timeout; a timeout is
+  `error` ("No response in 2 s").
+- **Counting every cron task as a separate outage.** If the scheduler is down, its tasks
+  inherit that state as children; the verdict counts the scheduler once.
+- **Checking a worker from inside the worker.** A stopped process can't report that it
+  stopped. Read heartbeats or the supervisor from outside.
+- **Turning the template into framework components.** It loses portability and its tested
+  behaviour. Only do it if the user asks.

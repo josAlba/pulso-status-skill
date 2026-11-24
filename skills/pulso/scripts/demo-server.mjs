@@ -1,14 +1,17 @@
 #!/usr/bin/env node
-// Servidor de demostración de Pulso, sin dependencias.
+// Pulso demo server. No dependencies, Node 18+.
 //
-//   node demo-server.mjs                       → http://localhost:4173 con datos que cambian solos
+//   node demo-server.mjs                       → http://localhost:4173 with data that changes on its own
 //   node demo-server.mjs --port 8080
-//   node demo-server.mjs --template ruta/a/mi-pagina.html --data ruta/a/estado.json
+//   node demo-server.mjs --template path/to/page.html --data path/to/status.json
 //
-// Escenarios (parámetro ?scenario= en la URL): live (por defecto), ok, ko, empty.
-// Otros parámetros: ?theme=dark|light para forzar el tema.
-// También sirve de adaptador de referencia: inyecta el JSON inicial en
-// <script id="pulso-seed"> y expone el mismo JSON en /status.
+// URL parameters:
+//   ?scenario=live|ok|ko|empty   which data set to serve (default: live)
+//   ?theme=dark|light            force a colour scheme
+//   ?lang=es                     interface language (sets <html lang>)
+//
+// It doubles as the reference adapter: it injects the initial JSON into
+// <script id="pulso-seed"> and serves the same document at /status.
 
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
@@ -21,13 +24,15 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, arg, i, all
 const port = Number(args.port || process.env.PORT || 4173);
 const templatePath = resolve(args.template || resolve(here, '../assets/status-page.html'));
 const dataPath = args.data ? resolve(args.data) : null;
+const SCENARIOS = ['live', 'ok', 'ko', 'empty'];
 
-/* ── Datos de ejemplo: una tienda online ficticia ─────────────────────────── */
-const SERVICE = 'Tienda Brezo';
+/* ── Sample data: a fictional online shop ─────────────────────────────────── */
+const SERVICE = 'Juniper Shop';
 const minutes = (n) => new Date(Date.now() - n * 60_000).toISOString();
-const clock = (date = new Date()) => date.toLocaleTimeString('es-ES', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+const clock = (date = new Date()) => date.toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+const hhmm = (date) => date.toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'});
 
-// Serie pseudoaleatoria estable que avanza con el tiempo (misma forma en cada petición del mismo minuto).
+// Stable pseudo-random series that advances with time (same shape for every request in the same 10 s).
 function series(seed, base, spread, length = 30, spikeAt = -1) {
   const tick = Math.floor(Date.now() / 10_000);
   return Array.from({length}, (_, i) => {
@@ -37,165 +42,166 @@ function series(seed, base, spread, length = 30, spikeAt = -1) {
     return Math.max(0, Math.round((base + wave * spread + spike) * 10) / 10);
   });
 }
-// Últimas 24 comprobaciones: el patrón describe las más recientes (a activo, w revisar, o apagado, e error).
+// Last 24 checks: the pattern describes the most recent ones (a active, w attention, o off, e error).
 const STATES = {a: 'active', w: 'attention', o: 'off', e: 'error'};
 const history = (recent = '') => [...'a'.repeat(24 - recent.length) + recent].map((c) => STATES[c]);
 
 function scenario(name) {
   const ko = name === 'ko';
-  const phase = Math.floor(Date.now() / 1000) % 60;
   const live = name === 'live';
+  const phase = Math.floor(Date.now() / 1000) % 60;
   const mailWorking = live ? phase % 14 < 7 : !ko;
   const gatewaySlow = ko || (live && phase >= 40);
   const now = new Date();
+  const lastSeen = hhmm(new Date(Date.now() - 27 * 60_000));
   const visitors = Math.round(series(13, 38, 9).at(-1));
   const busy = mailWorking ? 3 : 1;
 
+  if (name === 'empty') return {service: SERVICE, checkedAt: now.toISOString(), nodes: [], events: []};
+
   const nodes = [
-    // Procesos · carril izquierdo
-    {key: 'payments', label: 'Comprobación de pagos', status: 'active', detail: 'Esperando tareas', lane: 'workers',
-      description: 'Confirma con la pasarela los pagos que quedaron pendientes y marca los pedidos como pagados.',
-      since: minutes(312), history: history(), facts: {'Cola': 'payments', 'Procesos': '2 de 2', 'Mensajes en cola': 0, 'Último trabajo': clock(new Date(Date.now() - 41_000))},
-      links: [{label: 'Ver la cola', href: '#procesos/payments'}]},
-    {key: 'payments-pending', parent: 'payments', label: 'Pedidos pendientes de pago', status: 'active', detail: 'Sin pagos pendientes'},
-    {key: 'mail', label: 'Correos y avisos', status: mailWorking ? 'working' : 'active', detail: mailWorking ? 'En curso: confirmación de pedido' : 'Esperando tareas', lane: 'workers',
-      description: 'Envía confirmaciones de pedido, avisos de envío y recordatorios de carrito.',
-      since: minutes(1), history: history(), facts: {'Cola': 'mail', 'Enviados hoy': 1284, 'Mensajes en cola': mailWorking ? 3 : 0}},
-    {key: 'stock', label: 'Sincronización de stock', status: ko ? 'off' : 'active', detail: ko ? 'Sin señal desde las 16:42' : 'Esperando tareas', lane: 'workers',
-      description: 'Importa existencias del almacén cada cinco minutos.',
+    // Processes · left lane
+    {key: 'payments', label: 'Payment checks', status: 'active', detail: 'Waiting for jobs', lane: 'workers',
+      description: 'Confirms pending payments with the gateway and marks the orders as paid.',
+      since: minutes(312), history: history(), facts: {'Queue': 'payments', 'Workers': '2 of 2', 'Messages queued': 0, 'Last job': clock(new Date(Date.now() - 41_000))},
+      links: [{label: 'Open the queue', href: '#processes/payments'}]},
+    {key: 'payments-pending', parent: 'payments', label: 'Orders awaiting payment', status: 'active', detail: 'None pending'},
+    {key: 'mail', label: 'Emails and notifications', status: mailWorking ? 'working' : 'active', detail: mailWorking ? 'Sending: order confirmation' : 'Waiting for jobs', lane: 'workers',
+      description: 'Sends order confirmations, shipping updates and abandoned-cart reminders.',
+      since: minutes(1), history: history(), facts: {'Queue': 'mail', 'Sent today': '1,284', 'Messages queued': mailWorking ? 3 : 0}},
+    {key: 'stock', label: 'Stock sync', status: ko ? 'off' : 'active', detail: ko ? `No signal since ${lastSeen}` : 'Waiting for jobs', lane: 'workers',
+      description: 'Imports stock levels from the warehouse every five minutes.',
       since: ko ? minutes(27) : minutes(1440), history: history(ko ? 'aaaooooo' : ''),
-      facts: {'Cola': 'stock', 'Procesos': ko ? '0 de 1' : '1 de 1', 'Mensajes en cola': ko ? 46 : 0},
-      links: [{label: 'Cómo reiniciarlo', href: 'https://example.com/runbooks/stock'}]},
-    {key: 'feeds', label: 'Exportaciones y feeds', status: 'active', detail: 'Esperando tareas', lane: 'workers',
-      since: minutes(2880), history: history(), facts: {'Cola': 'feeds', 'Último feed': clock(new Date(Date.now() - 600_000))}},
-    {key: 'search', label: 'Indexado del buscador', status: 'active', detail: 'Esperando tareas', lane: 'workers',
-      since: minutes(600), history: history(), facts: {'Cola': 'search', 'Productos indexados': '18.240'}},
+      facts: {'Queue': 'stock', 'Workers': ko ? '0 of 1' : '1 of 1', 'Messages queued': ko ? 46 : 0},
+      links: [{label: 'How to restart it', href: 'https://example.com/runbooks/stock'}]},
+    {key: 'feeds', label: 'Exports and feeds', status: 'active', detail: 'Waiting for jobs', lane: 'workers',
+      since: minutes(2880), history: history(), facts: {'Queue': 'feeds', 'Last feed': clock(new Date(Date.now() - 600_000))}},
+    {key: 'search', label: 'Search indexing', status: 'active', detail: 'Waiting for jobs', lane: 'workers',
+      since: minutes(600), history: history(), facts: {'Queue': 'search', 'Products indexed': '18,240'}},
 
-    // Procesos · carril derecho
-    {key: 'database-link', label: 'Base de datos', status: 'active', detail: 'Responde en 4 ms', lane: 'services',
-      description: 'Conexión de la aplicación con la base de datos principal.', history: history(), since: minutes(4000)},
-    {key: 'scheduler', label: 'Programador', status: 'active', detail: `Última señal a las ${clock(new Date(Date.now() - 20_000))}`, lane: 'services',
-      description: 'Lanza las tareas periódicas. Si se para, ninguna de sus tareas se ejecuta.', since: minutes(1440), history: history()},
-    {key: 'cron-payments', parent: 'scheduler', label: 'Consultas de pago', status: 'active', detail: 'Cada minuto'},
-    {key: 'cron-sitemaps', parent: 'scheduler', label: 'Regenerar sitemaps', status: 'active', detail: 'Cada hora'},
-    {key: 'cron-carts', parent: 'scheduler', label: 'Limpiar carritos abandonados', status: 'active', detail: 'Cada noche a las 3:00'},
-    {key: 'failed', label: 'Tareas fallidas', status: ko ? 'error' : 'active', detail: ko ? '3 tareas fallidas en la última hora' : 'Ninguna', lane: 'services',
-      description: 'Tareas que agotaron los reintentos y esperan a que alguien las revise.',
+    // Processes · right lane
+    {key: 'database-link', label: 'Database', status: 'active', detail: 'Responding in 4 ms', lane: 'services',
+      description: 'The application’s connection to the primary database.', history: history(), since: minutes(4000)},
+    {key: 'scheduler', label: 'Scheduler', status: 'active', detail: `Last tick at ${clock(new Date(Date.now() - 20_000))}`, lane: 'services',
+      description: 'Launches the recurring tasks. If it stops, none of its tasks run.', since: minutes(1440), history: history()},
+    {key: 'cron-payments', parent: 'scheduler', label: 'Payment polling', status: 'active', detail: 'Every minute'},
+    {key: 'cron-sitemaps', parent: 'scheduler', label: 'Rebuild sitemaps', status: 'active', detail: 'Every hour'},
+    {key: 'cron-carts', parent: 'scheduler', label: 'Clear abandoned carts', status: 'active', detail: 'Every night at 03:00'},
+    {key: 'failed', label: 'Failed jobs', status: ko ? 'error' : 'active', detail: ko ? '3 failed jobs in the last hour' : 'None', lane: 'services',
+      description: 'Jobs that ran out of retries and are waiting for someone to review them.',
       since: ko ? minutes(18) : minutes(2000), history: history(ko ? 'aaaaeeee' : ''),
-      facts: ko ? {'Sincronizar stock #8812': 'Tiempo de espera agotado', 'Sincronizar stock #8813': 'Tiempo de espera agotado', 'Enviar factura #1204': 'Destinatario rechazado'} : {},
-      links: ko ? [{label: 'Revisar tareas fallidas', href: '#procesos/failed'}] : []},
+      facts: ko ? {'Sync stock #8812': 'Timed out', 'Sync stock #8813': 'Timed out', 'Send invoice #1204': 'Recipient rejected'} : {},
+      links: ko ? [{label: 'Review failed jobs', href: '#processes/failed'}] : []},
 
-    // Infraestructura · mapa: el camino de una petición, de izquierda a derecha
-    {key: 'visitors', tab: 'infra', icon: 'globe', label: 'Visitantes', meta: 'Internet', status: 'active',
-      description: 'Quien entra en la tienda o en el panel de administración desde internet.',
-      value: `${visitors} conexiones abiertas`, connects: ['web'], history: history(),
-      facts: {'Tienda': '/', 'Panel': '/admin'}},
-    {key: 'disk', tab: 'infra', icon: 'disk', label: 'Disco', meta: 'Disco del servidor', status: ko ? 'attention' : 'active',
-      detail: ko ? 'Quedan 9 GB libres' : 'Quedan 37 GB libres',
-      description: ko ? 'Los registros de la aplicación crecen más de lo normal desde esta mañana.' : 'Imágenes, feeds, sitemaps, cachés y registros.',
+    // Infrastructure · map: the path of a request, left to right
+    {key: 'visitors', tab: 'infra', icon: 'globe', label: 'Visitors', meta: 'Internet', status: 'active',
+      description: 'Anyone opening the shop or the admin panel from the internet.',
+      value: `${visitors} open connections`, connects: ['web'], history: history(),
+      facts: {'Shop': '/', 'Admin': '/admin'}},
+    {key: 'disk', tab: 'infra', icon: 'disk', label: 'Disk', meta: 'Server disk', status: ko ? 'attention' : 'active',
+      detail: ko ? '9 GB free' : '37 GB free',
+      description: ko ? 'Application logs have been growing faster than usual since this morning.' : 'Images, feeds, sitemaps, caches and logs.',
       gauge: {value: ko ? 91 : 63, max: 100, unit: '%'}, history: history(ko ? 'aawwwwww' : ''),
-      facts: {'Libre': ko ? '9 GB' : '37 GB', 'Tamaño': '100 GB', 'Volumen': '/var/lib'}},
-    {key: 'web', tab: 'infra', icon: 'server', label: 'Servidor web', meta: 'nginx', status: 'active',
-      description: 'Recibe las peticiones, sirve los ficheros estáticos y pasa el resto a la aplicación.',
-      value: `${visitors} conexiones activas`, tag: '1,1 ms', connects: ['app', {to: 'disk', passive: true}], history: history(),
-      facts: {'Leyendo / escribiendo': '0 / 2', 'En espera (keep-alive)': Math.max(0, visitors - 2), 'Peticiones atendidas hoy': '48.210'}},
-    {key: 'app', tab: 'infra', icon: 'cpu', label: 'Aplicación', meta: 'php-fpm · pool www', status: mailWorking ? 'working' : 'active',
-      description: 'Ejecuta la tienda y el panel: cada petición la atiende un proceso del pool.',
-      value: `${busy} ${busy === 1 ? 'activo' : 'activos'} · ${12 - busy} en espera`, tag: '12 ms', connects: ['db', 'cache'], history: history(),
-      facts: {'Procesos': `${12} de 24`, 'Peticiones (1 min)': 618, 'Límite alcanzado': '0 veces'}},
-    {key: 'workers', tab: 'infra', icon: 'queue', label: 'Procesos en segundo plano', meta: 'colas · programador', status: ko ? 'attention' : 'active',
-      detail: ko ? 'La sincronización de stock está parada' : '',
-      description: 'Procesan las colas y lanzan las tareas periódicas: pagos, correos, stock y feeds.',
-      value: ko ? '5 de 6 en marcha' : '6 de 6 en marcha', connects: ['db', 'cache'], history: history(ko ? 'aaawwwww' : ''),
-      facts: {'Con señal reciente': ko ? 5 : 6, 'Para revisar': 0, 'Parados': ko ? 1 : 0},
-      links: [{label: 'Ver los procesos', href: '#procesos'}]},
-    {key: 'db', tab: 'infra', icon: 'database', label: 'Base de datos', meta: 'MariaDB 10.11', status: 'active', detail: 'Réplica al día',
-      description: 'Guarda pedidos, catálogo, clientes y las colas de tareas.',
-      gauge: {value: 18, max: 150, unit: 'conexiones'}, tag: '4 ms', series: series(1, 4, 1.2), seriesLabel: 'Latencia de consultas, últimos 5 min (ms)',
-      history: history(), since: minutes(4000), facts: {'Versión': '10.11.9', 'Retraso de la réplica': '0 s', 'Consultas lentas (1 h)': 2}},
-    {key: 'cache', tab: 'infra', icon: 'bolt', label: 'Caché', meta: 'Redis 7.4', status: 'active', detail: 'Acierto del 97 %',
-      description: 'Catálogo, menús y consultas frecuentes, para responder sin ir a la base de datos.',
-      gauge: {value: 412, max: 1024, unit: 'MB'}, tag: '0,3 ms', series: series(4, 97, 1), seriesLabel: 'Porcentaje de aciertos',
-      history: history(), facts: {'Claves': '184.302', 'Expulsadas (1 h)': 0}},
+      facts: {'Free': ko ? '9 GB' : '37 GB', 'Size': '100 GB', 'Volume': '/var/lib'}},
+    {key: 'web', tab: 'infra', icon: 'server', label: 'Web server', meta: 'nginx', status: 'active',
+      description: 'Receives requests, serves static files and hands the rest to the application.',
+      value: `${visitors} active connections`, tag: '1.1 ms', connects: ['app', {to: 'disk', passive: true}], history: history(),
+      facts: {'Reading / writing': '0 / 2', 'Idle (keep-alive)': Math.max(0, visitors - 2), 'Requests today': '48,210'}},
+    {key: 'app', tab: 'infra', icon: 'cpu', label: 'Application', meta: 'php-fpm · pool www', status: mailWorking ? 'working' : 'active',
+      description: 'Runs the shop and the admin panel: each request is served by a worker from the pool.',
+      value: `${busy} busy · ${12 - busy} idle`, tag: '12 ms', connects: ['db', 'cache'], history: history(),
+      facts: {'Workers': '12 of 24', 'Requests (1 min)': 618, 'Max children reached': '0 times'}},
+    {key: 'workers', tab: 'infra', icon: 'queue', label: 'Background workers', meta: 'queues · scheduler', status: ko ? 'attention' : 'active',
+      detail: ko ? 'Stock sync is down' : '',
+      description: 'Process the queues and run the recurring tasks: payments, emails, stock and feeds.',
+      value: ko ? '5 of 6 running' : '6 of 6 running', connects: ['db', 'cache'], history: history(ko ? 'aaawwwww' : ''),
+      facts: {'Recent signal': ko ? 5 : 6, 'Need a look': 0, 'Down': ko ? 1 : 0},
+      links: [{label: 'See the processes', href: '#processes'}]},
+    {key: 'db', tab: 'infra', icon: 'database', label: 'Database', meta: 'MariaDB 10.11', status: 'active', detail: 'Replica up to date',
+      description: 'Stores orders, catalogue, customers and the job queues.',
+      gauge: {value: 18, max: 150, unit: 'connections'}, tag: '4 ms', series: series(1, 4, 1.2), seriesLabel: 'Query latency, last 5 min (ms)',
+      history: history(), since: minutes(4000), facts: {'Version': '10.11.9', 'Replica lag': '0 s', 'Slow queries (1 h)': 2}},
+    {key: 'cache', tab: 'infra', icon: 'bolt', label: 'Cache', meta: 'Redis 7.4', status: 'active', detail: '97 % hit rate',
+      description: 'Catalogue, menus and frequent queries, so most requests skip the database.',
+      gauge: {value: 412, max: 1024, unit: 'MB'}, tag: '0.3 ms', series: series(4, 97, 1), seriesLabel: 'Hit rate (%)',
+      history: history(), facts: {'Keys': '184,302', 'Evicted (1 h)': 0}},
 
-    // Infraestructura · tarjetas sin conexiones, agrupadas
-    {key: 'cpu', tab: 'infra', group: 'Servidor', label: 'CPU', status: 'active', detail: '4 núcleos',
-      gauge: {value: Math.round(series(7, 34, 12).at(-1)), max: 100, unit: '%'}, series: series(7, 34, 12), seriesLabel: 'Uso, últimos 5 min (%)', history: history()},
-    {key: 'memory', tab: 'infra', group: 'Servidor', label: 'Memoria', status: 'active', detail: 'Sin uso de swap',
-      gauge: {value: 5.1, max: 8, unit: 'GB'}, series: series(9, 5.1, 0.3), seriesLabel: 'En uso, últimos 5 min (GB)', history: history()},
-    {key: 'gateway', tab: 'infra', group: 'Servicios externos', label: 'Pasarela de pago', status: gatewaySlow ? 'attention' : 'active',
-      detail: gatewaySlow ? 'Responde lenta: 1,8 s' : 'Responde en 180 ms',
-      series: gatewaySlow ? series(11, 420, 80, 30, -6).map((v, i) => i > 23 ? v * 3.6 : v) : series(11, 180, 30), seriesLabel: 'Tiempo de respuesta (ms)',
+    // Infrastructure · cards without connections, grouped
+    {key: 'cpu', tab: 'infra', group: 'Server', label: 'CPU', status: 'active', detail: '4 cores',
+      gauge: {value: Math.round(series(7, 34, 12).at(-1)), max: 100, unit: '%'}, series: series(7, 34, 12), seriesLabel: 'Usage, last 5 min (%)', history: history()},
+    {key: 'memory', tab: 'infra', group: 'Server', label: 'Memory', status: 'active', detail: 'No swap in use',
+      gauge: {value: 5.1, max: 8, unit: 'GB'}, series: series(9, 5.1, 0.3), seriesLabel: 'In use, last 5 min (GB)', history: history()},
+    {key: 'gateway', tab: 'infra', group: 'External services', label: 'Payment gateway', status: gatewaySlow ? 'attention' : 'active',
+      detail: gatewaySlow ? 'Slow to respond: 1.8 s' : 'Responding in 180 ms',
+      series: gatewaySlow ? series(11, 420, 80, 30, -6).map((v, i) => i > 23 ? v * 3.6 : v) : series(11, 180, 30), seriesLabel: 'Response time (ms)',
       history: history(gatewaySlow ? 'aaaaaaww' : ''), since: gatewaySlow ? minutes(4) : minutes(900),
-      links: [{label: 'Estado del proveedor', href: 'https://example.com/status'}]},
-    {key: 'smtp', tab: 'infra', group: 'Servicios externos', label: 'Correo saliente', status: 'active', detail: 'Entrega normal',
-      gauge: {value: 1284, max: 5000, unit: 'envíos hoy'}, history: history()},
-    {key: 'cdn', tab: 'infra', group: 'Servicios externos', label: 'CDN de imágenes', status: 'active', detail: 'Acierto del 99 %', history: history()},
+      links: [{label: 'Provider status page', href: 'https://example.com/status'}]},
+    {key: 'smtp', tab: 'infra', group: 'External services', label: 'Outgoing email', status: 'active', detail: 'Delivering normally',
+      gauge: {value: 1284, max: 5000, unit: 'sent today'}, history: history()},
+    {key: 'cdn', tab: 'infra', group: 'External services', label: 'Image CDN', status: 'active', detail: '99 % hit rate', history: history()},
   ];
 
   const events = [
     ...(ko ? [
-      {at: minutes(18), status: 'error', title: 'Tres tareas han fallado', detail: 'Agotaron los reintentos al sincronizar stock y enviar una factura.', node: 'failed'},
-      {at: minutes(27), status: 'off', title: 'La sincronización de stock dejó de dar señal', detail: 'El último proceso salió con código 137 (sin memoria).', node: 'stock'},
-      {at: minutes(95), status: 'attention', title: 'El disco ha pasado del 85 %', node: 'disk'},
+      {at: minutes(18), status: 'error', title: 'Three jobs failed', detail: 'They ran out of retries while syncing stock and sending an invoice.', node: 'failed'},
+      {at: minutes(27), status: 'off', title: 'Stock sync stopped sending a signal', detail: 'The last worker exited with code 137 (out of memory).', node: 'stock'},
+      {at: minutes(95), status: 'attention', title: 'Disk usage passed 85 %', node: 'disk'},
     ] : []),
-    ...(gatewaySlow ? [{at: minutes(4), status: 'attention', title: 'La pasarela de pago responde lenta', detail: 'Más de un segundo en las últimas comprobaciones.', node: 'gateway'}] : []),
-    {at: minutes(140), status: 'active', title: 'El correo saliente vuelve a entregar', detail: 'Se enviaron los 212 correos que esperaban en cola.', node: 'smtp'},
-    {at: minutes(152), status: 'error', title: 'El correo saliente rechaza conexiones', node: 'smtp'},
-    {at: minutes(60 * 26), status: 'active', title: 'Procesos reiniciados tras el despliegue', detail: 'Versión 4.12.0.'},
+    ...(gatewaySlow ? [{at: minutes(4), status: 'attention', title: 'Payment gateway is responding slowly', detail: 'Over one second in the latest checks.', node: 'gateway'}] : []),
+    {at: minutes(140), status: 'active', title: 'Outgoing email is delivering again', detail: 'The 212 queued emails went out.', node: 'smtp'},
+    {at: minutes(152), status: 'error', title: 'Outgoing email is refusing connections', node: 'smtp'},
+    {at: minutes(60 * 26), status: 'active', title: 'Workers restarted after the deploy', detail: 'Version 4.12.0.'},
   ];
-
-  if (name === 'empty') return {service: SERVICE, checkedAt: now.toISOString(), nodes: [], events: []};
 
   return {
     service: SERVICE,
     checkedAt: now.toISOString(),
     refreshSeconds: 5,
     lanes: [
-      {key: 'workers', label: 'Procesadores de tareas', side: 'left'},
-      {key: 'services', label: 'Programación y servicios', side: 'right'},
+      {key: 'workers', label: 'Job workers', side: 'left'},
+      {key: 'services', label: 'Scheduling and services', side: 'right'},
     ],
     nodes,
     events,
-    links: [{label: 'Ver colas y procesos', href: '#procesos'}],
+    links: [{label: 'Queues and workers', href: '#processes'}],
   };
 }
 
-/* ── Servidor ─────────────────────────────────────────────────────────────── */
+/* ── Server ───────────────────────────────────────────────────────────────── */
 async function payload(name) {
   if (dataPath) return JSON.parse(await readFile(dataPath, 'utf8'));
   return scenario(name);
 }
+// Escape "<" so the JSON can never close the <script> tag it lives in.
 const toSeed = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
 
 createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
-  const name = ['ok', 'ko', 'live', 'empty'].includes(url.searchParams.get('scenario')) ? url.searchParams.get('scenario') : 'live';
+  const name = SCENARIOS.includes(url.searchParams.get('scenario')) ? url.searchParams.get('scenario') : 'live';
   try {
     if (url.pathname === '/status') {
-      response.writeHead(200, {'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store'});
+      response.writeHead(200, {'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store'});
       response.end(JSON.stringify(await payload(name)));
       return;
     }
     if (url.pathname === '/' || url.pathname === '/index.html') {
       const theme = ['dark', 'light'].includes(url.searchParams.get('theme')) ? url.searchParams.get('theme') : null;
+      const lang = /^[a-z]{2}(-[A-Za-z]{2})?$/.test(url.searchParams.get('lang') || '') ? url.searchParams.get('lang') : null;
       const seed = toSeed(await payload(name));
-      let html = await readFile(templatePath, 'utf8');
-      html = html
+      const html = (await readFile(templatePath, 'utf8'))
         .replace(/(<script type="application\/json" id="pulso-seed">)[\s\S]*?(<\/script>)/, (_, open, close) => open + seed + close)
-        .replace(/data-endpoint="[^"]*"/, `data-endpoint="/status?scenario=${name}"`);
-      if (theme) html = html.replace('<html lang="es">', `<html lang="es" data-theme="${theme}">`);
-      response.writeHead(200, {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'});
+        .replace(/data-endpoint="[^"]*"/, `data-endpoint="/status?scenario=${name}"`)
+        .replace(/<html lang="[^"]*"/, (tag) => (lang ? `<html lang="${lang}"` : tag) + (theme ? ` data-theme="${theme}"` : ''));
+      response.writeHead(200, {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'private, no-store'});
       response.end(html);
       return;
     }
     response.writeHead(404, {'Content-Type': 'text/plain; charset=utf-8'});
-    response.end('No encontrado');
+    response.end('Not found');
   } catch (error) {
     response.writeHead(500, {'Content-Type': 'text/plain; charset=utf-8'});
     response.end(String(error));
   }
 }).listen(port, () => {
-  console.log(`Pulso en http://localhost:${port}  (escenarios: ?scenario=live|ok|ko|empty, tema: ?theme=dark)`);
+  console.log(`Pulso demo at http://localhost:${port}  (?scenario=live|ok|ko|empty · ?theme=dark · ?lang=es)`);
 });
-

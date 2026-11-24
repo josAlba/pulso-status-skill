@@ -1,17 +1,19 @@
 {
   "name": "pulso",
-  "description": "Skill para crear páginas de estado del sistema a pantalla completa: veredicto, esquema animado de procesos, infraestructura, eventos y modales de detalle. Para cualquier backend.",
-  "version": "1.1.0",
+  "description": "Full-screen system status pages you can read at a glance: a big verdict, an animated process diagram, an infrastructure map, an event timeline and linkable detail modals. Works with any backend.",
+  "version": "2.0.0",
   "author": {
     "name": "josAlba"
   },
   "license": "MIT",
+  "homepage": "https://github.com/josAlba/pulso-status-skill",
   "repository": "https://github.com/josAlba/pulso-status-skill",
   "keywords": [
     "status-page",
-    "health",
+    "health-check",
     "monitoring",
     "dashboard",
+    "observability",
     "skill"
   ]
 }

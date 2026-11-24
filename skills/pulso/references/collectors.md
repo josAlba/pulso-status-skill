@@ -1,126 +1,127 @@
-# Qué vigilar y cómo decidir cada estado
+# What to watch and how to decide each status
 
-Una página de estado solo sirve si sus colores son fiables. Esta guía resume cómo
-convertir señales técnicas en los cinco estados del contrato.
+A status page is only useful if its colours can be trusted. This guide turns technical
+signals into the five statuses of the contract.
 
-## Principios
+## Principles
 
-- **Mide desde fuera del proceso vigilado.** Un worker parado no puede decir que está
-  parado. Usa latidos (heartbeats) que el proceso escribe y que otro lee, o consulta
-  al supervisor (Docker, systemd, Supervisor, Kubernetes).
-- **Ausencia de señal = `off`, no `active`.** Si no hay registro, la pieza está apagada
-  hasta que demuestre lo contrario.
-- **`error` es un fallo concreto** (última ejecución fallida, conexión rechazada,
-  tareas en la cola de fallidas). **`off` es silencio** (sin proceso, sin latido).
-- **`attention` avisa antes de que algo se rompa**: retrasos, colas que crecen,
-  latencias altas, disco casi lleno, latido que empieza a llegar tarde.
-- **Las hijas heredan cuando dependen de la madre.** Si el programador está parado,
-  sus tareas también lo están: no cuentes cada tarea como una pieza parada más.
-- **Cada comprobación tiene un tiempo máximo** (1–2 s). Una comprobación colgada no
-  puede colgar la página: si se agota el tiempo, la pieza pasa a `error` («No responde
-  en 2 s»).
-- **Cachea lo caro.** Si medir cuesta, guarda la lectura unos segundos en el servidor
-  o pon a un proceso a medir en segundo plano y deja que la página lea el resultado.
+- **Measure from outside the process being watched.** A stopped worker can't say it has
+  stopped. Use heartbeats that the process writes and something else reads, or ask the
+  supervisor (Docker, systemd, Supervisor, Kubernetes).
+- **No signal means `off`, not `active`.** Without a record, the component is down until
+  proven otherwise.
+- **`error` is a concrete failure** (last run failed, connection refused, jobs in the
+  failed queue). **`off` is silence** (no process, no heartbeat).
+- **`attention` warns before something breaks**: delays, growing queues, high latency,
+  a nearly full disk, a heartbeat that starts arriving late.
+- **Children inherit when they depend on the parent.** If the scheduler is down, its
+  tasks are too: don't count each task as another outage.
+- **Every check has a time limit** (1–2 s). A hung check must never hang the page: on
+  timeout the component becomes `error` ("No response in 2 s").
+- **Cache what is expensive.** If a reading is costly, keep it for a few seconds on the
+  server, or have a background job measure it and let the page read the result.
 
-## Recetas por tipo de pieza
+## Recipes by component type
 
-### Worker o consumidor de cola
+### Worker or queue consumer
 
-| Señal | Estado |
+| Signal | Status |
 |---|---|
-| Latido hace menos de 2× su intervalo y ejecutando una tarea | `working` («En curso: envío de correo») |
-| Latido reciente, sin tarea | `active` («Esperando tareas») |
-| Latido entre 2× y 5× el intervalo, o mensajes listos esperando más de N minutos | `attention` («12 tareas esperando desde hace 14 min») |
-| Sin latido o sin proceso | `off` («Sin señal desde las 16:42») |
-| El proceso sale con error en bucle, o ha fallado la última tarea sin reintento | `error` |
+| Heartbeat newer than 2× its interval and running a job | `working` ("Sending: order confirmation") |
+| Recent heartbeat, no job | `active` ("Waiting for jobs") |
+| Heartbeat between 2× and 5× the interval, or ready messages waiting more than N minutes | `attention` ("12 jobs waiting for 14 min") |
+| No heartbeat or no process | `off` ("No signal since 16:42") |
+| The process crash-loops, or the last job failed without retry | `error` |
 
-Para registrar el latido: un listener del evento de «worker en marcha o inactivo» del
-framework (Symfony Messenger `WorkerRunningEvent`, Laravel `Looping`, señales de Celery,
-eventos de BullMQ) que escribe `{pid, host, rol, tarea_actual, visto_en}` en Redis o en
-una tabla. Olvida los latidos de procesos sustituidos: guarda por rol y host, no solo
-por PID.
+To record the heartbeat, hook into the framework's "worker running / idle" event
+(Symfony Messenger `WorkerRunningEvent`, Laravel `Looping`, Celery signals, BullMQ
+events) and write `{pid, host, role, current_job, seen_at}` to Redis or a table. Forget
+heartbeats from replaced processes: key them by role and host, not only by PID.
 
-`facts` útiles: cola, procesos vivos de los esperados, mensajes en cola, edad del
-mensaje más antiguo, última tarea terminada.
+Useful `facts`: queue, live workers out of expected, messages queued, age of the oldest
+message, last finished job.
 
-### Programador (cron / scheduler)
+### Scheduler (cron)
 
-- El programador escribe su propio latido en cada tic. Sin latido en 2–3 tics, `off`.
-- Cada tarea programada es hija del programador: `detail` con su frecuencia en lenguaje
-  llano («Cada hora», «Cada noche a las 3:00») y, si se guarda, la última ejecución.
-- Una tarea cuya última ejecución falló pasa a `error`. Una que no se ejecuta desde
-  hace más de 2 periodos pasa a `attention`.
+- The scheduler writes its own heartbeat on every tick. No heartbeat for 2–3 ticks → `off`.
+- Each scheduled task is a child of the scheduler: `detail` gives its frequency in plain
+  words ("Every hour", "Every night at 03:00") and, if stored, the last run.
+- A task whose last run failed becomes `error`. One that hasn't run for more than 2
+  periods becomes `attention`.
 
-### Tareas fallidas (dead letter)
+### Failed jobs (dead letter)
 
-- 0 → `active` («Ninguna»). Más de 0 → `error` («3 tareas fallidas en la última hora»).
-- `facts`: las últimas fallidas con su motivo, sin datos personales.
-- `links`: a la pantalla donde se reintentan.
+- 0 → `active` ("None"). More than 0 → `error` ("3 failed jobs in the last hour").
+- `facts`: the latest failures with their reason, without personal data.
+- `links`: to the screen where they can be retried.
 
-### Base de datos
+### Database
 
-- `SELECT 1` con tiempo máximo. Responde → `active` con la latencia en `detail`.
-- Latencia por encima del umbral, réplica con retraso o conexiones por encima del 80 %
-  del máximo → `attention`. No responde → `error`.
-- `gauge`: conexiones de las máximas. `series`: latencia reciente.
+- `SELECT 1` with a timeout. Responds → `active`, latency in `detail`.
+- Latency over the threshold, replica lag, or connections above 80 % of the maximum →
+  `attention`. No response → `error`.
+- `gauge`: connections out of the maximum. `series`: recent latency.
 
-### Caché (Redis, Memcached)
+### Cache (Redis, Memcached)
 
-- `PING`. Memoria usada de la máxima en `gauge`. Tasa de aciertos en `detail` o `series`.
-- Expulsiones (evictions) en aumento o memoria por encima del 90 % → `attention`.
+- `PING`. Used memory out of the maximum in `gauge`. Hit rate in `detail` or `series`.
+- Rising evictions or memory above 90 % → `attention`.
 
-### Disco, CPU y memoria
+### Disk, CPU and memory
 
-- Disco: `attention` por encima del 85 %, `error` por encima del 95 %. Indica cuánto
-  queda libre en `detail` («Quedan 9 GB libres»).
-- CPU: carga sostenida (media de varios minutos, no un pico) por encima del 85 % → `attention`.
-- Memoria: uso de swap o memoria disponible por debajo del 10 % → `attention`.
-- En contenedores, mide los límites del contenedor (cgroups), no los del host.
+- Disk: `attention` above 85 %, `error` above 95 %. Say how much is free in `detail`
+  ("9 GB free").
+- CPU: sustained load (a several-minute average, not a spike) above 85 % → `attention`.
+- Memory: swap in use or available memory below 10 % → `attention`.
+- In containers, measure the container limits (cgroups), not the host's.
 
-### Servicios externos (pagos, correo, CDN, APIs)
+### External services (payments, email, CDN, APIs)
 
-- Comprobación ligera y barata (endpoint de salud, `HEAD`, conexión SMTP sin enviar),
-  hecha por un proceso en segundo plano, no en cada carga de la página.
-- Latencia alta → `attention`; errores o tiempo agotado → `error`.
-- Mejor aún, mide el uso real: porcentaje de llamadas fallidas en los últimos 5 minutos.
-- `links`: a la página de estado del proveedor.
+- A light, cheap check (health endpoint, `HEAD`, SMTP connect without sending), run by a
+  background job, not on every page load.
+- High latency → `attention`; errors or timeouts → `error`.
+- Better still, measure real usage: the share of failed calls in the last 5 minutes.
+- `links`: to the provider's status page.
 
-### Negocio
+### Business signals
 
-Las piezas de negocio son las que más valor dan: «Pedidos pendientes de pago»,
-«Feeds publicados hoy», «Correos rebotados». Úsalas como hijas del proceso que las
-atiende. Ejemplo: pagos sin confirmar más de 15 minutos → `attention`.
+Business components are the most valuable ones: "Orders awaiting payment", "Feeds
+published today", "Bounced emails". Make them children of the process that handles them.
+Example: payments unconfirmed for more than 15 minutes → `attention`.
 
-### Mapa de infraestructura
+### Infrastructure map
 
-- Una pieza por salto del recorrido de una petición: visitantes (conexiones abiertas
-  según el servidor web), servidor web (`stub_status` de nginx, `server-status` de
-  Apache), aplicación (estado del pool de php-fpm, de Puma o de Gunicorn), procesos en
-  segundo plano (resumen de los de la pestaña Procesos), base de datos y caché.
-- `connects` indica quién llama a quién, no por dónde van las respuestas. El disco y
-  otros recursos que se leen sin peticiones van como conexión `passive`.
-- Si una pieza del mapa resume otras (por ejemplo, «5 de 6 en marcha»), su estado es
-  `attention` cuando alguna de ellas falla, y su `detail` dice cuál.
-- `value` y `tag` son para cifras que no caben en `gauge`: «3 activos · 9 en espera»
-  y la latencia de la última comprobación.
+- One component per hop of a request: visitors (open connections according to the web
+  server), web server (nginx `stub_status`, Apache `server-status`), application (pool
+  status of php-fpm, Puma or Gunicorn), background workers (a summary of the Processes
+  tab), database and cache.
+- `connects` says who calls whom, not which way responses travel. Disks and other
+  resources read without requests are `passive` connections.
+- If a map component summarises others ("5 of 6 running"), its status is `attention`
+  when any of them fails, and its `detail` names which one.
+- `value` and `tag` are for figures that don't fit a `gauge`: "3 busy · 9 idle" and the
+  latency of the last check.
 
-## Historial y eventos
+## History and events
 
-- `history`: guarda el estado de cada pieza en cada evaluación en una lista corta
-  (por ejemplo, las últimas 24 en Redis con `LPUSH` + `LTRIM`). Es lo que alimenta la
-  tira de comprobaciones del modal.
-- `since`: guarda el momento en que cambió el estado; no lo recalcules en cada lectura.
-- `events`: al detectar un cambio de estado de una pieza, añade un evento con un título
-  en lenguaje llano. Conserva los últimos 50 o las últimas 48 horas.
+- `history`: store each component's status on every assessment in a short list (for
+  example the last 24 in Redis with `LPUSH` + `LTRIM`). It feeds the strip of recent
+  checks in the modal.
+- `since`: store the moment the status changed; don't recompute it on every read.
+- `events`: when a component changes status, add an event with a plain-language title.
+  Keep the last 50, or the last 48 hours.
 
-## Textos
+## Copy
 
-Escribe para quien abre la página en mitad de un problema:
+Write for the person who opens the page in the middle of an incident:
 
-| Mejor | Peor |
+| Better | Worse |
 |---|---|
-| Sin señal desde las 16:42 | heartbeat stale |
-| 12 tareas esperando desde hace 14 min | backlog=12 |
-| Quedan 9 GB libres | disk 91% |
-| Responde lenta: 1,8 s | p95 1800ms |
-| Cada noche a las 3:00 | 0 3 * * * |
+| No signal since 16:42 | heartbeat stale |
+| 12 jobs waiting for 14 min | backlog=12 |
+| 9 GB free | disk 91% |
+| Slow to respond: 1.8 s | p95 1800ms |
+| Every night at 03:00 | 0 3 * * * |
+
+If the page is in another language, write `detail`, `description`, `facts` labels and
+event titles in that language too: the template translates its own chrome, not your data.

@@ -1,213 +1,292 @@
+<div align="center">
+
 # Pulso
 
+**Status pages you can read at a glance.**
+
+A [Claude Code](https://claude.com/claude-code) skill that gives any web project a
+full-screen system status page: workers, queues, cron, databases and external services,
+wired to your real backend and covered by tests.
+
 [![skills.sh](https://skills.sh/b/josAlba/pulso-status-skill)](https://skills.sh/josAlba/pulso-status-skill)
+[![License: MIT](https://img.shields.io/badge/license-MIT-17935f.svg)](LICENSE)
+[![Dependencies: none](https://img.shields.io/badge/dependencies-none-15232d.svg)](skills/pulso/assets/status-page.html)
+[![Any backend](https://img.shields.io/badge/backend-any-5b6b75.svg)](skills/pulso/references/adapters.md)
 
-**Una skill para Claude Code que crea páginas de estado del sistema que se entienden de un vistazo.**
+[Install](#install) · [Features](#features) · [Live demo](#try-the-demo) · [How it works](#how-it-works) · [Data contract](#data-contract)
 
-Pídele a Claude «hazme una página de estado» en cualquier proyecto (Symfony, Laravel,
-Django, Rails, Express, Next.js, Go…). Con esta skill, Claude hace inventario de lo
-que corre de verdad (workers, colas, cron, base de datos, caché, servicios externos),
-decide cómo se calcula cada estado en el backend y conecta una página a pantalla
-completa ya diseñada y probada.
+<br>
 
-## Instalación
+<img src="docs/screenshots/hero.jpg" alt="Pulso status page: a big red verdict reading “2 components are down”, with job workers and services wired to a central core" width="100%">
 
-Con [skills.sh](https://skills.sh), desde la carpeta de tu proyecto:
+</div>
+
+## Why Pulso
+
+Most health endpoints answer a machine. Pulso answers a person: **"Is everything
+working?"**, in one sentence big enough to read from across the room, with the detail one
+click away.
+
+Ask Claude for a status page and the skill takes it from there. It inventories what
+actually runs in your project, puts the status rules in a small tested function in your
+backend, and connects a ready-made page that has already been designed, tested and
+made accessible. The page itself is a single HTML file with no dependencies, so it fits
+Symfony, Laravel, Django, Rails, Express, Next.js, Go or anything else that can serve
+JSON.
+
+## Install
+
+With [skills.sh](https://skills.sh), from your project folder:
 
 ```bash
 npx skills add josAlba/pulso-status-skill --skill pulso -a claude-code
 ```
 
-Para tenerla en todos tus proyectos (en `~/.claude/skills/pulso`), añade `-g`:
+Add `-g` to install it for every project (in `~/.claude/skills/pulso`):
 
 ```bash
 npx skills add josAlba/pulso-status-skill --skill pulso -a claude-code -g
 ```
 
-Necesita Node 22.20 o posterior. Sin `-a claude-code` te pregunta en qué agentes
-instalarla (Codex, Cursor…). Después, en Claude Code, pide «Hazme una página de estado
-del sistema». Si prefieres clonar el repositorio o instalarla como plugin, mira
-[otras formas de instalarla](#otras-formas-de-instalarla).
+Requires Node 22.20+. Leave out `-a claude-code` to pick other agents (Codex, Cursor…).
+Prefer git or the plugin system? See [other ways to install](#other-ways-to-install).
 
-![Pestaña Procesos: todo funciona](docs/screenshots/procesos.jpg)
+## Usage
 
-## Qué incluye la página
+In Claude Code, inside your project:
 
-- **Veredicto en grande**: «Todo funciona», «Hay una cosa que revisar», «Hay 2 piezas
-  paradas». La franja superior, el favicon y el título de la pestaña cambian de color
-  a la vez, así que el estado se ve aunque la pestaña esté en segundo plano.
-- **Procesos**: esquema con un núcleo al centro y las piezas en dos carriles,
-  unidas por cables por los que circulan señales. Las señales son rápidas si la pieza
-  está trabajando, lentas si hay que revisarla y no aparecen si está parada.
-- **Infraestructura**: mapa del camino que recorre una petición (visitantes → servidor
-  web → aplicación → base de datos y caché), con cables animados como los de Procesos,
-  y debajo tarjetas agrupadas con cifra, medidor y tendencia (CPU, memoria, servicios
-  externos).
-- **Eventos**: línea de tiempo con los cambios de estado recientes.
-- **Modales de detalle** para cualquier pieza: descripción, desde cuándo está así, tira
-  de las últimas comprobaciones, tendencia ampliada, datos y enlaces (runbooks, logs).
-  Cada modal tiene su propia URL (`#procesos/stock`) para compartirlo.
-- **Refresco automático** sin recargar, con avisos claros si se pierde la conexión, si
-  caduca la sesión o si los datos se quedan viejos.
-- **Modo oscuro**, diseño adaptado a móvil, navegación por teclado y respeto por
-  `prefers-reduced-motion`.
-- **Sin dependencias**: un único HTML con CSS y JavaScript nativos que consume un JSON.
+> Build a system status page in the admin area with the workers, the cron jobs, the database and the payment gateway.
 
-| Algo falla | Detalle de una pieza |
-|---|---|
-| ![Avería](docs/screenshots/procesos-averia.jpg) | ![Modal de detalle](docs/screenshots/detalle.jpg) |
-| **Mapa de infraestructura** | **Detalle con tendencia** |
-| ![Infraestructura](docs/screenshots/infraestructura.jpg) | ![Modal de infraestructura](docs/screenshots/detalle-infra.jpg) |
-| **Eventos** | **Modo oscuro** |
-| ![Eventos](docs/screenshots/eventos.jpg) | ![Modo oscuro](docs/screenshots/oscuro.jpg) |
+> I want something like /system/health for this project.
 
-<p align="center"><img src="docs/screenshots/movil.jpg" alt="Versión móvil" width="300"></p>
+Claude loads the skill and follows its workflow:
 
-## Pruébala en 10 segundos
+1. **Inventory** the workers, queues, schedulers, datastores and services that really run, and confirm the list with you.
+2. **Decide each status in the backend**: thresholds, timeouts and plain-language messages, in a pure assessor with unit tests.
+3. **Expose two admin-only routes**: the page (with the first reading inlined) and the JSON it refreshes from.
+4. **Adapt the template** to your brand and language, without touching the parts that make it work.
+5. **Verify every state** in a browser: healthy, warning, down, offline, expired session, mobile and reduced motion.
 
-Necesitas Node 18 o posterior.
+## Features
+
+<img src="docs/screenshots/diagram.gif" alt="Animated processes diagram: signals travel along the wires from each worker to the central core" width="100%">
+
+- **A verdict first.** "All systems go", "One thing needs a look", "2 components are down".
+  The top strip, the favicon and the tab title change colour together, so the state shows
+  even from a background tab.
+- **Processes that look alive.** Workers sit in two lanes around a core, joined by wires
+  that carry signals: fast when a component is busy, slow when it needs a look, none when
+  it is down.
+- **An infrastructure map.** The path a request takes (visitors → web server → application
+  → database and cache) with live wires, followed by grouped cards with gauges and trends
+  for CPU, memory and external services.
+- **An event timeline** of recent state changes, each linked to its component.
+- **Linkable detail modals.** Description, time in the current state, a strip of recent
+  checks, an enlarged trend, facts and runbook links. Every modal has its own URL
+  (`#processes/stock`) to paste into a chat during an incident.
+- **Honest about failure.** Clear banners when the endpoint is unreachable, the session
+  expires or the data goes stale.
+- **Built for everyone.** Dark mode, mobile layout, full keyboard navigation, a native
+  `<dialog>`, status never shown by colour alone, and `prefers-reduced-motion` respected.
+- **English and Spanish built in**, chosen with `<html lang>`; adding a language is one
+  dictionary.
+- **Zero dependencies.** One HTML file with plain CSS and JavaScript that renders a JSON document.
+
+### Gallery
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/infrastructure.jpg" alt="Infrastructure map from visitors to database and cache, with the disk and background workers flagged amber"></td>
+    <td width="50%"><img src="docs/screenshots/detail.jpg" alt="Detail modal for a stopped worker, with its recent checks, facts and a runbook link"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Infrastructure map</b> · the path of a request, with live wires</sub></td>
+    <td align="center"><sub><b>Detail modal</b> · history, facts and runbooks, one URL each</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/detail-infra.jpg" alt="Detail modal for a slow payment gateway, with its response time trend"></td>
+    <td width="50%"><img src="docs/screenshots/events.jpg" alt="Event timeline with recent state changes"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Trends</b> · when a service started to degrade</sub></td>
+    <td align="center"><sub><b>Events</b> · what changed, and when</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/dark.jpg" alt="Infrastructure map in dark mode, everything healthy"></td>
+    <td width="50%"><img src="docs/screenshots/mobile.jpg" alt="The status page on two phones, one light with outages and one dark with everything healthy"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Dark mode</b> · automatic, or forced for wall screens</sub></td>
+    <td align="center"><sub><b>Mobile</b> · a single column, same information</sub></td>
+  </tr>
+</table>
+
+## Try the demo
+
+No install needed, just Node 18+:
 
 ```bash
 node skills/pulso/scripts/demo-server.mjs
 ```
 
-Abre <http://localhost:4173>. Los datos de la tienda ficticia cambian solos cada pocos
-segundos. Otros escenarios:
+Open <http://localhost:4173>. The fictional shop's data changes on its own every few
+seconds. Other views:
 
-| URL | Muestra |
+| URL | Shows |
 |---|---|
-| `/?scenario=ok` | Todo funciona |
-| `/?scenario=ko` | Un proceso parado, tareas fallidas, disco casi lleno y pasarela lenta |
-| `/?scenario=live` | Estados que cambian con el tiempo (por defecto) |
-| `/?scenario=empty` | Sin piezas que vigilar |
-| `/?theme=dark` | Fuerza el modo oscuro (se combina con los anteriores) |
-| `#infra/gateway` | Abre directamente una pestaña y un modal |
+| `/?scenario=ok` | Everything healthy |
+| `/?scenario=ko` | A stopped worker, failed jobs, a nearly full disk and a slow gateway |
+| `/?scenario=live` | States that change over time (default) |
+| `/?scenario=empty` | Nothing to watch yet |
+| `/?theme=dark` | Forces dark mode (combines with the above) |
+| `/?lang=es` | Spanish interface |
+| `#infra/gateway` | Opens a tab and a modal directly |
 
-## Otras formas de instalarla
+To preview your own template and data:
 
-### Con el script del repositorio (todos tus proyectos)
+```bash
+node skills/pulso/scripts/demo-server.mjs --template path/to/template.html --data path/to/status.json
+```
+
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph backend["Your backend"]
+        R["Readings<br/>heartbeats · pings · metrics"] --> A["Assessor<br/>pure function, unit-tested"]
+        A --> J["GET /admin/…/status<br/>JSON document"]
+        A --> H["GET /admin/…/health<br/>HTML + inlined seed"]
+    end
+    subgraph browser["Browser"]
+        P["status-page.html<br/>verdict · diagram · map · events · modals"]
+    end
+    H -- first paint --> P
+    P -- "refresh every 10 s" --> J
+```
+
+The logic lives on the server; the page only paints. That is why the same HTML works with
+any stack, and why the part that matters (when something counts as down or worth a look)
+is covered by tests in your project's own language.
+
+## Data contract
+
+A trimmed example. The full reference is in
+[`skills/pulso/references/data-contract.md`](skills/pulso/references/data-contract.md).
+
+```json
+{
+  "service": "Juniper Shop",
+  "checkedAt": "2026-11-23T17:00:33+01:00",
+  "lanes": [{"key": "workers", "label": "Job workers", "side": "left"}],
+  "nodes": [
+    {"key": "stock", "label": "Stock sync", "status": "off",
+     "detail": "No signal since 16:42", "lane": "workers",
+     "history": ["active", "active", "off"], "facts": {"Queue": "stock"}},
+    {"key": "disk", "tab": "infra", "group": "Server", "label": "Disk", "status": "attention",
+     "detail": "9 GB free", "gauge": {"value": 91, "max": 100, "unit": "%"}}
+  ],
+  "events": [{"at": "2026-11-23T16:42:00+01:00", "status": "off", "title": "Stock sync stopped sending a signal", "node": "stock"}]
+}
+```
+
+For the infrastructure map, each component lists what it calls:
+
+```json
+{"key": "app", "tab": "infra", "icon": "cpu", "label": "Application", "meta": "php-fpm · pool www",
+ "status": "active", "value": "3 busy · 9 idle", "tag": "12 ms",
+ "connects": ["db", "cache", {"to": "disk", "passive": true}]}
+```
+
+| Status | Meaning |
+|---|---|
+| `active` | Working, with a recent signal |
+| `working` | Working and busy right now |
+| `attention` | Still working, but something needs a look |
+| `off` | Stopped or silent |
+| `error` | The last run or check failed |
+
+## Framework support
+
+The template is engine-agnostic (no `{{`, `{%` or `<%` inside), and the skill ships
+adapter examples for:
+
+| Stack | Page and JSON routes | Seed escaping |
+|---|---|---|
+| Symfony | Controller + Twig, `#[IsGranted]` | `json_encode` with `JSON_HEX_TAG` |
+| Laravel | Route group + Blade, `can:admin` | `json_encode` with `JSON_HEX_TAG` |
+| Django | Views + `json_script` | built in |
+| Rails | Controller + ERB | `json_escape` |
+| Express / Node | Two handlers, string replace | `<` |
+| Next.js | Route handlers (App Router) | `<` |
+| Go | `net/http` + `embed` | `json.Marshal` |
+
+Details in [`skills/pulso/references/adapters.md`](skills/pulso/references/adapters.md).
+
+## Other ways to install
+
+**From a clone, for every project.** Symlinks the skill into `~/.claude/skills/pulso`, so
+`git pull` keeps it current (`--copy` copies it instead):
 
 ```bash
 git clone https://github.com/josAlba/pulso-status-skill.git ~/Documents/GitHub/pulso-status-skill
 ```
 
 ```bash
-~/Documents/GitHub/pulso-status-skill/scripts/instalar.sh
+~/Documents/GitHub/pulso-status-skill/scripts/install.sh
 ```
 
-Crea un enlace simbólico en `~/.claude/skills/pulso`, así que un `git pull` la mantiene al
-día. Con `--copiar` hace una copia en lugar del enlace.
-
-### En un proyecto concreto (para compartirla con el equipo)
+**Into one project, to share it with the team.** Leaves the skill in
+`/path/to/project/.claude/skills/pulso`, ready to commit:
 
 ```bash
-./scripts/instalar.sh --copiar /ruta/al/proyecto
+./scripts/install.sh --copy /path/to/project
 ```
 
-Deja la skill en `/ruta/al/proyecto/.claude/skills/pulso` para versionarla con el proyecto.
-
-### Como plugin
-
-El repositorio también es un plugin y un marketplace de Claude Code
-(`.claude-plugin/`):
+**As a Claude Code plugin.** The repository is also a plugin and a marketplace:
 
 ```text
 /plugin marketplace add josAlba/pulso-status-skill
 /plugin install pulso@pulso
 ```
 
-## Uso
-
-En Claude Code, dentro de tu proyecto:
-
-> Hazme una página de estado del sistema en el backoffice con los workers, el cron, la base de datos y la pasarela de pago.
-
-> Quiero algo como /system/health para este proyecto.
-
-Claude carga la skill y sigue su flujo: inventario de piezas, reglas de estado en el
-backend con tests, dos rutas protegidas (HTML y JSON), adaptación de la plantilla a la
-marca y verificación de todos los estados.
-
-## Cómo funciona
-
-```
- backend                                   navegador
-┌───────────────────────┐   semilla JSON  ┌──────────────────────────┐
-│ evaluador (puro, con  │ ──────────────▶ │ status-page.html         │
-│ tests): lecturas →    │                 │ pinta veredicto, esquema,│
-│ documento del contrato│ ◀────────────── │ infra, eventos y modales │
-└───────────────────────┘  GET cada 10 s  └──────────────────────────┘
-```
-
-La lógica vive en el servidor; la página solo pinta. Así el mismo HTML sirve para
-cualquier stack, y lo que importa (cuándo algo está parado o hay que revisarlo) queda
-cubierto por tests en el lenguaje del proyecto.
-
-## Estructura
+## Repository layout
 
 ```
 pulso-status-skill/
-├── skills/pulso/                 ← la skill (esto es lo que se instala)
-│   ├── SKILL.md                  flujo de trabajo y reglas
-│   ├── assets/status-page.html   plantilla autocontenida
-│   ├── scripts/demo-server.mjs   demo y adaptador de referencia en Node
+├── skills/pulso/                 ← the skill (this is what gets installed)
+│   ├── SKILL.md                  workflow, rules and definition of done
+│   ├── assets/status-page.html   self-contained template
+│   ├── scripts/demo-server.mjs   demo and reference Node adapter
 │   └── references/
-│       ├── data-contract.md      contrato JSON
-│       ├── collectors.md         qué vigilar y cómo decidir cada estado
+│       ├── data-contract.md      the JSON contract
+│       ├── collectors.md         what to watch and how to decide each status
 │       ├── adapters.md           Symfony, Laravel, Django, Express, Next.js, Rails, Go
-│       └── design.md             sistema visual y cómo adaptarlo
-├── .claude-plugin/               manifiestos de plugin y marketplace
+│       └── design.md             visual system and how to adapt it
+├── .claude-plugin/               plugin and marketplace manifests
 ├── scripts/
-│   ├── instalar.sh               instala la skill
-│   └── capturas.sh               regenera las capturas de este README
+│   ├── install.sh                installs the skill from a clone
+│   └── screenshots.mjs           regenerates the README images
 └── docs/screenshots/
 ```
 
-## Contrato de datos, en resumen
-
-```json
-{
-  "service": "Tienda Brezo",
-  "checkedAt": "2026-11-23T17:00:33+01:00",
-  "lanes": [{"key": "workers", "label": "Procesadores de tareas", "side": "left"}],
-  "nodes": [
-    {"key": "stock", "label": "Sincronización de stock", "status": "off",
-     "detail": "Sin señal desde las 16:42", "lane": "workers",
-     "history": ["active", "active", "off"], "facts": {"Cola": "stock"}},
-    {"key": "disk", "tab": "infra", "group": "Datos", "label": "Disco", "status": "attention",
-     "detail": "Quedan 9 GB libres", "gauge": {"value": 91, "max": 100, "unit": "%"}}
-  ],
-  "events": [{"at": "2026-11-23T16:42:00+01:00", "status": "off", "title": "La sincronización de stock dejó de dar señal", "node": "stock"}]
-}
-```
-
-Para el mapa de infraestructura, cada pieza indica a qué otras llama:
-
-```json
-{"key": "app", "tab": "infra", "icon": "cpu", "label": "Aplicación", "meta": "php-fpm · pool www",
- "status": "active", "value": "3 activos · 9 en espera", "tag": "12 ms",
- "connects": ["db", "cache", {"to": "disk", "passive": true}]}
-```
-
-Estados: `active`, `working`, `attention`, `off` y `error`. La referencia completa está en
-[`skills/pulso/references/data-contract.md`](skills/pulso/references/data-contract.md).
-
-## Capturas
+## Regenerating the images
 
 ```bash
-./scripts/capturas.sh
+node scripts/screenshots.mjs
 ```
 
-Regenera `docs/screenshots/` con el servidor de demo y Google Chrome sin interfaz
-(macOS; en otros sistemas indica el binario con `CHROME=/ruta/a/chrome`).
+Drives Chrome over the DevTools protocol against the demo server, frames each view and
+writes `docs/screenshots/`. Pass names (`hero`, `dark`, `mobile`, `diagram`…) to rebuild
+only some. Needs Node 22+, Chrome or Chromium (`CHROME=/path/to/chrome` if it isn't found)
+and ffmpeg for the animated diagram.
 
-## Origen
+## Background
 
-Pulso nace de generalizar la página `/backoffice/system/health` de un ecommerce en
-Symfony: el esquema de procesos alrededor de un núcleo, el veredicto en grande y las
-señales que circulan por los cables vienen de ahí. La skill añade las pestañas de
-infraestructura y eventos, los modales, el modo oscuro y la independencia del framework.
+Pulso grew out of the `/backoffice/system/health` page of a Symfony e-commerce site: the
+process diagram around a core, the big verdict and the signals running along the wires
+come from there. The skill adds the infrastructure map, events, modals, dark mode,
+translations and framework independence.
 
-## Licencia
+## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © josAlba

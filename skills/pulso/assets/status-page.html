@@ -1,30 +1,31 @@
 <!DOCTYPE html>
 <!--
-  Pulso · página de estado a pantalla completa.
-  Plantilla autocontenida (sin dependencias). El servidor solo tiene que:
-    1. Sustituir el contenido de <script id="pulso-seed"> por el JSON inicial
-       (escapando "<" como < para que no pueda cerrar la etiqueta).
-    2. Poner en data-endpoint la URL que devuelve ese mismo JSON.
-  Contrato de datos: references/data-contract.md
+  Pulso · full-screen system status page.
+  Self-contained template (no dependencies). The server only has to:
+    1. Replace the contents of <script id="pulso-seed"> with the initial JSON
+       (escaping "<" as \u003c so it can never close the tag).
+    2. Point data-endpoint at the URL that returns that same JSON.
+  Interface language: <html lang>. English and Spanish are built in (see I18N).
+  Data contract: references/data-contract.md
 -->
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <meta name="color-scheme" content="light dark">
-  <title>Estado del sistema</title>
+  <title>System status</title>
   <link rel="icon" id="pulso-favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%239ba7af'/%3E%3C/svg%3E">
   <style>
-    /* ── Marca: cambia estas variables para adaptarla a cada proyecto ───────── */
+    /* ── Brand: change these variables to fit each project ─────────────────── */
     :root {
       --font: 'Poppins', 'Avenir Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
-      --glacier: #edf1f3;   /* fondo */
-      --paper: #fbfcfd;     /* tarjetas */
-      --ink: #15232d;       /* texto y núcleo */
+      --glacier: #edf1f3;   /* background */
+      --paper: #fbfcfd;     /* cards */
+      --ink: #15232d;       /* text and core */
       --muted: #5b6b75;
       --rule: #d3dbe0;
-      --disc: #15232d;      /* fondo del núcleo */
+      --disc: #15232d;      /* core background */
       --disc-ink: #fbfcfd;
       --active: #17935f;
       --attention: #e3a21a;
@@ -46,7 +47,7 @@
       --active: #2fb87d; --attention: #f0b232; --attention-ink: #f5c45a; --off: #6c7c86; --error: #ef5a50;
     }
 
-    /* ── Tono por estado: todo lo que lleva data-status hereda --tone ─────────── */
+    /* ── Tone per status: anything with data-status inherits --tone ──────────── */
     [data-status] { --tone: var(--active); --tone-ink: var(--active); }
     [data-status="attention"] { --tone: var(--attention); --tone-ink: var(--attention-ink); }
     [data-status="off"] { --tone: var(--off); --tone-ink: var(--muted); }
@@ -80,7 +81,7 @@
       margin: 0 auto;
     }
 
-    /* ── Veredicto ─────────────────────────────────────────────────────────── */
+    /* ── Verdict ───────────────────────────────────────────────────────────── */
     .verdict { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 32px; }
     .verdict h1 { margin: 0; font-size: clamp(2.25rem, 5vw, 4rem); font-weight: 800; line-height: 1.05; letter-spacing: -0.03em; text-wrap: balance; }
     .verdict-meta { margin: 0; color: var(--muted); text-align: right; font-size: .95rem; }
@@ -88,7 +89,7 @@
     .banner { flex-basis: 100%; margin: 0; padding: 10px 14px; border-left: 4px solid var(--tone); background: var(--paper); }
     .banner a { font-weight: 600; }
 
-    /* ── Pestañas ──────────────────────────────────────────────────────────── */
+    /* ── Tabs ──────────────────────────────────────────────────────────────── */
     .tabs { display: flex; flex-wrap: wrap; gap: 0 28px; border-bottom: 1px solid var(--rule); }
     .tab {
       display: flex; align-items: center; gap: 8px;
@@ -109,7 +110,7 @@
     .tab-badge:empty { min-width: 8px; width: 8px; height: 8px; padding: 0; background: var(--tone); }
     .tab-badge[data-status="off"]:empty { background: transparent; box-shadow: inset 0 0 0 2px var(--off); }
 
-    /* ── Señales y píldoras ────────────────────────────────────────────────── */
+    /* ── Signals and pills ─────────────────────────────────────────────────── */
     .signal { position: relative; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--tone); }
     .card-head > .signal { box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent); }
     [data-status="off"] > .signal, [data-status="off"] > .card-head > .signal { background: transparent; box-shadow: inset 0 0 0 2px var(--off); }
@@ -124,7 +125,7 @@
       color: var(--tone-ink); background: color-mix(in srgb, var(--tone) 13%, transparent);
     }
 
-    /* ── Tarjetas (procesos e infraestructura) ─────────────────────────────── */
+    /* ── Cards (processes and infrastructure) ──────────────────────────────── */
     .card {
       position: relative;
       background: var(--paper);
@@ -155,7 +156,7 @@
     .sub-detail { grid-column: 2; color: var(--muted); font-size: .75rem; line-height: 1.3; }
     .sub[data-status="attention"] .sub-detail, .sub[data-status="error"] .sub-detail { color: var(--tone-ink); }
 
-    /* ── Pestaña Procesos: esquema con núcleo y cables ─────────────────────── */
+    /* ── Processes tab: core diagram with wires ────────────────────────────── */
     .map {
       position: relative;
       display: grid;
@@ -197,7 +198,7 @@
     .core-name { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.01em; line-height: 1.15; }
     .core-state { font-size: .78rem; color: color-mix(in srgb, var(--disc-ink) 72%, transparent); }
 
-    /* ── Pestaña Infraestructura ───────────────────────────────────────────── */
+    /* ── Infrastructure tab ────────────────────────────────────────────────── */
     .infra { display: grid; gap: 28px; align-content: start; }
     .group-title { margin: 0 0 10px; font-size: .8rem; font-weight: 600; color: var(--muted); }
     .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
@@ -213,7 +214,7 @@
     .trend .area { fill: color-mix(in srgb, var(--tone) 12%, transparent); }
     .trend-label { color: var(--muted); font-size: .72rem; }
 
-    /* ── Infraestructura: mapa de conexiones ───────────────────────────────── */
+    /* ── Infrastructure: connection map ────────────────────────────────────── */
     .topo {
       position: relative;
       display: grid;
@@ -253,18 +254,18 @@
     .wire-end[data-status="error"] { fill: var(--error); }
     .infra > .topo + .group { padding-top: 20px; border-top: 1px solid var(--rule); }
 
-    /* ── Pestaña Eventos ───────────────────────────────────────────────────── */
+    /* ── Events tab ────────────────────────────────────────────────────────── */
     .events { list-style: none; margin: 0; padding: 0; max-width: 860px; }
-    .event { display: grid; grid-template-columns: 5.5rem 10px 1fr; gap: 0 16px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+    .event { display: grid; grid-template-columns: 8rem 10px 1fr; gap: 0 16px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--rule); }
     .event:last-child { border-bottom: 0; }
-    .event time { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+    .event time { white-space: nowrap; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
     .event > .signal { align-self: center; }
     .event-title { margin: 0; font-size: .95rem; font-weight: 600; }
     .event-title .open:hover { text-decoration: underline; text-underline-offset: 3px; }
     .event-detail { margin: 2px 0 0; color: var(--muted); font-size: .85rem; }
     .empty { max-width: 46ch; margin: 8vh auto 0; color: var(--muted); text-align: center; }
 
-    /* ── Leyenda ───────────────────────────────────────────────────────────── */
+    /* ── Legend ────────────────────────────────────────────────────────────── */
     .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: .85rem; }
     .legend ul { display: flex; flex-wrap: wrap; gap: 8px 20px; list-style: none; margin: 0; padding: 0; }
     .legend li { display: flex; align-items: center; gap: 8px; }
@@ -272,7 +273,7 @@
     .legend-links { display: flex; gap: 20px; margin-left: auto; }
     .legend-links a { color: var(--ink); font-weight: 600; }
 
-    /* ── Modal de detalle ──────────────────────────────────────────────────── */
+    /* ── Detail modal ──────────────────────────────────────────────────────── */
     .detail {
       width: min(580px, calc(100vw - 32px));
       max-height: calc(100dvh - 48px);
@@ -348,15 +349,15 @@
 <body data-status="off">
   <main class="board" id="pulso" data-endpoint="/status">
     <header class="verdict">
-      <h1 id="pulso-headline">Comprobando…</h1>
+      <h1 id="pulso-headline">Checking…</h1>
       <p class="verdict-meta"><strong id="pulso-summary"></strong><br><span id="pulso-checked"></span></p>
       <p class="banner" id="pulso-banner" role="status" hidden></p>
     </header>
 
-    <nav class="tabs" role="tablist" aria-label="Vistas" id="pulso-tabs">
-      <button class="tab" role="tab" id="tab-processes" aria-controls="panel-processes" aria-selected="true">Procesos <span class="tab-badge" data-status="off"></span></button>
-      <button class="tab" role="tab" id="tab-infra" aria-controls="panel-infra" aria-selected="false" tabindex="-1">Infraestructura <span class="tab-badge" data-status="off"></span></button>
-      <button class="tab" role="tab" id="tab-events" aria-controls="panel-events" aria-selected="false" tabindex="-1">Eventos <span class="tab-badge" data-status="off"></span></button>
+    <nav class="tabs" role="tablist" aria-label="Views" id="pulso-tabs">
+      <button class="tab" role="tab" id="tab-processes" aria-controls="panel-processes" aria-selected="true"><span data-role="tab-label">Processes</span> <span class="tab-badge" data-status="off"></span></button>
+      <button class="tab" role="tab" id="tab-infra" aria-controls="panel-infra" aria-selected="false" tabindex="-1"><span data-role="tab-label">Infrastructure</span> <span class="tab-badge" data-status="off"></span></button>
+      <button class="tab" role="tab" id="tab-events" aria-controls="panel-events" aria-selected="false" tabindex="-1"><span data-role="tab-label">Events</span> <span class="tab-badge" data-status="off"></span></button>
     </nav>
 
     <section class="panel" role="tabpanel" id="panel-processes" aria-labelledby="tab-processes"></section>
@@ -364,10 +365,10 @@
     <section class="panel" role="tabpanel" id="panel-events" aria-labelledby="tab-events" hidden></section>
 
     <footer class="legend">
-      <ul id="pulso-legend" aria-label="Leyenda"></ul>
-      <nav class="legend-links" id="pulso-links" aria-label="Enlaces"></nav>
+      <ul id="pulso-legend" aria-label="Legend"></ul>
+      <nav class="legend-links" id="pulso-links" aria-label="Links"></nav>
     </footer>
-    <noscript>Esta página necesita JavaScript para mostrar el estado.</noscript>
+    <noscript>This page needs JavaScript to show the status.</noscript>
   </main>
 
   <dialog class="detail" id="pulso-detail" aria-labelledby="pulso-detail-title" closedby="any"></dialog>
@@ -377,46 +378,95 @@
     (() => {
       'use strict';
 
-      /* ── Textos: traduce aquí la página entera ─────────────────────────────── */
-      const TEXT = {
-        statuses: {active: 'Activo', working: 'Trabajando', attention: 'Revisar', off: 'Apagado', error: 'Error'},
-        core: {active: 'Todo en marcha', working: 'Todo en marcha', attention: 'Con avisos', error: 'Con paradas', off: 'Sin datos'},
-        defaultLanes: ['Procesos', 'Servicios'],
-        headline: {
-          ok: 'Todo funciona',
-          stopped: (n) => n === 1 ? 'Hay una pieza parada' : `Hay ${n} piezas paradas`,
-          warnings: (n) => n === 1 ? 'Hay una cosa que revisar' : `Hay ${n} cosas que revisar`,
+      /* ── Copy: every visible string lives here, one dictionary per language ─
+         The page picks the dictionary from <html lang> ("en", "es", "es-MX"…) and
+         falls back to English. To add a language, copy `en`, translate it and set
+         <html lang>. Dates, times and numbers follow the same language via Intl. */
+      const I18N = {
+        en: {
+          tabs: {processes: 'Processes', infra: 'Infrastructure', events: 'Events'},
+          aria: {tabs: 'Views', legend: 'Legend', links: 'Links'},
+          statuses: {active: 'Active', working: 'Working', attention: 'Check', off: 'Off', error: 'Error'},
+          core: {active: 'All running', working: 'All running', attention: 'With warnings', error: 'With outages', off: 'No data'},
+          defaultLanes: ['Processes', 'Services'],
+          system: 'System',
+          checking: 'Checking…',
+          headline: {
+            ok: 'All systems go',
+            stopped: (n) => n === 1 ? 'One component is down' : `${n} components are down`,
+            warnings: (n) => n === 1 ? 'One thing needs a look' : `${n} things need a look`,
+          },
+          summary: {
+            ok: (n) => `${n} ${n === 1 ? 'component' : 'components'} running.`,
+            rest: 'Everything else is running.',
+            moreWarnings: (n) => `And ${n === 1 ? 'one thing' : n + ' things'} to check.`,
+            running: 'Everything is still running.',
+          },
+          checked: (time, seconds) => `Checked at ${time}. Refreshes every ${seconds} seconds.`,
+          title: (headline, service) => `${headline} – ${service} status`,
+          offline: (time) => `Can’t reach the status endpoint. Showing data from ${time}; retrying automatically.`,
+          expired: ['Your session has expired. ', 'Sign in again', ' to keep watching the status.'],
+          stale: (minutes) => `This data is ${minutes} minutes old. The process that produces it may have stopped.`,
+          since: (relative) => `In this state since ${relative}.`,
+          history: 'Recent checks',
+          historyAxis: (n) => [`${n} checks ago`, 'Now'],
+          of: (max, unit) => `of ${max}${unit ? ' ' + unit : ''}`,
+          parts: 'Parts',
+          connectsTo: 'Connects to',
+          usedBy: 'Called by',
+          details: 'Details',
+          close: 'Close',
+          noProcesses: 'Nothing to watch yet.',
+          noEvents: 'No recent changes. When something changes state it will show up here.',
         },
-        summary: {
-          ok: (n) => `${n} ${n === 1 ? 'pieza' : 'piezas'} en marcha.`,
-          rest: 'El resto funciona.',
-          moreWarnings: (n) => `Y ${n === 1 ? 'una cosa' : n + ' cosas'} que revisar.`,
-          running: 'Todo sigue en marcha.',
+        es: {
+          tabs: {processes: 'Procesos', infra: 'Infraestructura', events: 'Eventos'},
+          aria: {tabs: 'Vistas', legend: 'Leyenda', links: 'Enlaces'},
+          statuses: {active: 'Activo', working: 'Trabajando', attention: 'Revisar', off: 'Apagado', error: 'Error'},
+          core: {active: 'Todo en marcha', working: 'Todo en marcha', attention: 'Con avisos', error: 'Con paradas', off: 'Sin datos'},
+          defaultLanes: ['Procesos', 'Servicios'],
+          system: 'Sistema',
+          checking: 'Comprobando…',
+          headline: {
+            ok: 'Todo funciona',
+            stopped: (n) => n === 1 ? 'Hay una pieza parada' : `Hay ${n} piezas paradas`,
+            warnings: (n) => n === 1 ? 'Hay una cosa que revisar' : `Hay ${n} cosas que revisar`,
+          },
+          summary: {
+            ok: (n) => `${n} ${n === 1 ? 'pieza' : 'piezas'} en marcha.`,
+            rest: 'El resto funciona.',
+            moreWarnings: (n) => `Y ${n === 1 ? 'una cosa' : n + ' cosas'} que revisar.`,
+            running: 'Todo sigue en marcha.',
+          },
+          checked: (time, seconds) => `Comprobado a las ${time}. Se actualiza cada ${seconds} segundos.`,
+          title: (headline, service) => `${headline} – Estado de ${service}`,
+          offline: (time) => `No se puede consultar el estado. Los datos son de las ${time}; se vuelve a intentar automáticamente.`,
+          expired: ['La sesión ha caducado. ', 'Vuelve a iniciar sesión', ' para seguir viendo el estado.'],
+          stale: (minutes) => `Los datos tienen ${minutes} minutos. Puede que el proceso que los genera esté parado.`,
+          since: (relative) => `En este estado desde ${relative}.`,
+          history: 'Últimas comprobaciones',
+          historyAxis: (n) => [`Hace ${n}`, 'Ahora'],
+          of: (max, unit) => `de ${max}${unit ? ' ' + unit : ''}`,
+          parts: 'Partes',
+          connectsTo: 'Se conecta a',
+          usedBy: 'La llaman',
+          details: 'Detalles',
+          close: 'Cerrar',
+          noProcesses: 'No hay procesos que vigilar todavía.',
+          noEvents: 'Sin cambios recientes. Cuando algo cambie de estado aparecerá aquí.',
         },
-        checked: (time, seconds) => `Comprobado a las ${time}. Se actualiza cada ${seconds} segundos.`,
-        title: (headline, service) => `${headline} – Estado de ${service}`,
-        offline: (time) => `No se puede consultar el estado. Los datos son de las ${time}; se vuelve a intentar automáticamente.`,
-        expired: (href) => `La sesión ha caducado. <a href="${href}">Vuelve a iniciar sesión</a> para seguir viendo el estado.`,
-        stale: (minutes) => `Los datos tienen ${minutes} minutos. Puede que el proceso que los genera esté parado.`,
-        since: (relative) => `En este estado desde ${relative}.`,
-        history: 'Últimas comprobaciones',
-        historyAxis: (n) => [`Hace ${n}`, 'Ahora'],
-        of: (max, unit) => `de ${max}${unit ? ' ' + unit : ''}`,
-        parts: 'Partes',
-        connectsTo: 'Se conecta a',
-        usedBy: 'La llaman',
-        details: 'Detalles',
-        close: 'Cerrar',
-        noProcesses: 'No hay procesos que vigilar todavía.',
-        noEvents: 'Sin cambios recientes. Cuando algo cambie de estado aparecerá aquí.',
       };
-      const TABS = {processes: 'procesos', infra: 'infra', events: 'eventos'};
+      const lang = document.documentElement.lang || 'en';
+      const TEXT = I18N[lang.toLowerCase()] || I18N[lang.slice(0, 2).toLowerCase()] || I18N.en;
+      // URL fragments per tab (#processes/stock). The Spanish slugs of Pulso 1.x still work.
+      const TABS = {processes: 'processes', infra: 'infra', events: 'events'};
+      const TAB_ALIASES = {procesos: 'processes', eventos: 'events'};
       const STATUSES = ['active', 'working', 'attention', 'off', 'error'];
       const SEVERITY = {active: 0, working: 0, off: 1, attention: 2, error: 3};
-      // Partículas por estado: cuántas viajan por el cable y cuánto tardan en llegar al núcleo.
+      // Sparks per status: how many travel along a wire and how long they take to reach the core.
       const FLOW = {working: [3, 1.6], active: [1, 3.4], attention: [1, 6]};
       const SVG = 'http://www.w3.org/2000/svg';
-      // Iconos del mapa de infraestructura (24×24, trazo). Añade aquí los que necesites.
+      // Infrastructure map icons (24×24, stroke). Add the ones you need here.
       const ICONS = {
         globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.4 2.5 3.6 5.5 3.6 9s-1.2 6.5-3.6 9c-2.4-2.5-3.6-5.5-3.6-9S9.6 5.5 12 3z"/>',
         server: '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
@@ -435,7 +485,6 @@
       const root = document.getElementById('pulso');
       const dialog = document.getElementById('pulso-detail');
       const banner = document.getElementById('pulso-banner');
-      const lang = document.documentElement.lang || 'es';
       const timeFormat = new Intl.DateTimeFormat(lang, {hour: '2-digit', minute: '2-digit', second: '2-digit'});
       const shortTime = new Intl.DateTimeFormat(lang, {hour: '2-digit', minute: '2-digit'});
       const dayFormat = new Intl.DateTimeFormat(lang, {day: 'numeric', month: 'short'});
@@ -452,7 +501,7 @@
       let timer = null;
       let loading = false;
 
-      /* ── Utilidades DOM ─────────────────────────────────────────────────── */
+      /* ── DOM helpers ────────────────────────────────────────────────────── */
       function h(tag, attributes = {}, ...children) {
         const element = document.createElement(tag);
         for (const [key, value] of Object.entries(attributes)) {
@@ -479,7 +528,7 @@
         return '';
       };
 
-      /* ── Datos: normaliza y calcula el veredicto si el servidor no lo trae ─ */
+      /* ── Data: normalise and derive the verdict when the server omits it ── */
       function normalize(raw) {
         const nodes = (raw.nodes || []).map((node) => ({
           tab: 'processes', parent: null, detail: '', ...node,
@@ -500,12 +549,12 @@
         });
 
         return {
-          service: raw.service || 'Sistema',
+          service: raw.service || TEXT.system,
           status,
           headline: raw.headline || (stopped ? TEXT.headline.stopped(stopped) : warnings ? TEXT.headline.warnings(warnings) : TEXT.headline.ok),
           summary: raw.summary || (stopped
             ? (warnings ? TEXT.summary.moreWarnings(warnings) : TEXT.summary.rest)
-            : warnings ? TEXT.summary.running : TEXT.summary.ok(nodes.length)),
+            : warnings ? TEXT.summary.running : TEXT.summary.ok(top.length)),
           checkedAt: raw.checkedAt ? new Date(raw.checkedAt) : new Date(),
           refreshSeconds: Math.max(2, Number(raw.refreshSeconds) || 10),
           lanes,
@@ -520,7 +569,7 @@
         n.value != null, n.tag != null, n.icon, n.column, JSON.stringify(n.connects ?? null)].join('|')).join(';')
         + '#' + d.lanes.map((l) => l.key + l.side + l.label).join(';');
 
-      /* ── Mapa de infraestructura: columnas a partir de las conexiones ───── */
+      /* ── Infrastructure map: columns derived from the connections ──────── */
       function topology(nodes) {
         const keys = new Set(nodes.map((n) => n.key));
         const edges = [];
@@ -536,17 +585,17 @@
         const flow = edges.filter((e) => !e.passive);
         const touches = (key, list) => list.filter((e) => e.from === key || e.to === key);
         const col = Object.fromEntries(members.map((n) => [n.key, 0]));
-        // Cada pieza, a la derecha de quien la llama (con tope por si hay ciclos).
+        // Each component goes right of whoever calls it (capped in case of cycles).
         for (let i = 0; i < members.length; i++) {
           for (const e of flow) col[e.to] = Math.max(col[e.to], Math.min(col[e.from] + 1, members.length));
         }
-        // Quien solo llama, justo antes de la primera pieza a la que llama.
+        // Pure callers sit just before the first component they call.
         const called = new Set(flow.map((e) => e.to));
         for (const n of members) {
           const targets = flow.filter((e) => e.from === n.key).map((e) => col[e.to]);
           if (!called.has(n.key) && targets.length) col[n.key] = Math.max(0, Math.min(...targets) - 1);
         }
-        // Con solo conexiones pasivas (disco, montajes), una columna antes que su pareja.
+        // Only passive links (disk, mounts): one column before its partner.
         for (const n of members) {
           if (touches(n.key, flow).length) continue;
           const partners = touches(n.key, edges).map((e) => col[e.from === n.key ? e.to : e.from]);
@@ -561,7 +610,7 @@
         };
       }
 
-      /* ── Piezas ─────────────────────────────────────────────────────────── */
+      /* ── Components ─────────────────────────────────────────────────────── */
       function card(node, extraClass = '') {
         const kids = childrenOf(node.key);
         const element = h('article', {class: `card ${extraClass}`.trim(), 'data-key': node.key, 'data-link': node.tab === 'processes' ? true : null},
@@ -666,7 +715,7 @@
         }
       }
 
-      /* ── Paneles ────────────────────────────────────────────────────────── */
+      /* ── Panels ─────────────────────────────────────────────────────────── */
       function buildProcesses() {
         const panel = document.getElementById('panel-processes');
         const top = data.nodes.filter((n) => n.tab === 'processes' && !n.parent);
@@ -717,7 +766,7 @@
         })));
       }
 
-      /* ── Cables animados ────────────────────────────────────────────────── */
+      /* ── Animated wires ─────────────────────────────────────────────────── */
       function sparks(wires, id, status, index) {
         const flow = FLOW[status];
         if (!flow || calm.matches) return;
@@ -734,7 +783,7 @@
         drawProcesses();
         drawInfra();
       }
-      // Estado de un cable del mapa: el peor de sus dos extremos.
+      // A map wire takes the worse status of its two ends.
       function edgeStatus(a, b) {
         for (const status of ['error', 'off', 'attention', 'working']) if (a === status || b === status) return status;
         return 'active';
@@ -755,7 +804,7 @@
             cx: r.left + r.width / 2 - origin.left, cy: r.top + r.height / 2 - origin.top,
           };
         });
-        // Lado de cada extremo: hacia la columna del otro; en la misma columna, arriba o abajo.
+        // Each end leaves towards the other column; within one column, top or bottom.
         const lines = topo.edges.map((edge) => {
           const a = boxes[edge.from], b = boxes[edge.to];
           if (!a || !b) return null;
@@ -764,7 +813,7 @@
           [[a, b, sides[0], 0], [b, a, sides[1], 1]].forEach(([box, other, side, end]) => (box.sides[side] ||= []).push({line, end, other, side}));
           return line;
         }).filter(Boolean);
-        // Reparte los extremos de cada lado para que los cables no salgan del mismo punto.
+        // Spread the ends along each side so wires never share an anchor point.
         for (const box of Object.values(boxes)) {
           for (const [side, list] of Object.entries(box.sides)) {
             const vertical = side === 'left' || side === 'right';
@@ -820,7 +869,7 @@
       }
       const resizer = new ResizeObserver(() => requestAnimationFrame(draw));
 
-      /* ── Cabecera, pestañas, leyenda ─────────────────────────────────────── */
+      /* ── Header, tabs, legend ───────────────────────────────────────────── */
       function setFavicon(status) {
         const color = getComputedStyle(document.documentElement).getPropertyValue(`--${status === 'working' ? 'active' : status}`).trim() || '#9ba7af';
         const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="${color}"/></svg>`;
@@ -852,7 +901,7 @@
           tab.hidden = !visible;
           const badge = tab.querySelector('.tab-badge');
           if (id === 'events') {
-            // Los eventos son historia, no estado: el contador va en neutro.
+            // Events are history, not state: the counter stays neutral.
             const recent = (data.events || []).filter((e) => Date.now() - new Date(e.at) < 864e5);
             badge.dataset.status = 'off';
             badge.textContent = String(recent.length);
@@ -887,7 +936,7 @@
         if (id !== 'events') requestAnimationFrame(draw);
       }
 
-      /* ── Modal de detalle ───────────────────────────────────────────────── */
+      /* ── Detail modal ───────────────────────────────────────────────────── */
       function renderDetail(node) {
         const kids = childrenOf(node.key);
         const facts = Object.entries(node.facts || {});
@@ -950,10 +999,10 @@
         if (open) openDetail(open.dataset.open);
       });
 
-      /* ── Navegación por hash: #infra, #procesos/clave-de-pieza ───────────── */
+      /* ── Hash navigation: #infra, #processes/component-key ───────────────── */
       function fromHash() {
         const [slug, key] = location.hash.slice(1).split('/');
-        const id = Object.keys(TABS).find((k) => TABS[k] === slug);
+        const id = Object.keys(TABS).find((k) => TABS[k] === slug) || TAB_ALIASES[slug];
         if (id && !document.getElementById(`tab-${id}`).hidden) select(id, {history: false});
         if (key && data && byKey(decodeURIComponent(key))) openDetail(decodeURIComponent(key), {history: false});
         else if (!key && dialog.open) dialog.close();
@@ -977,7 +1026,7 @@
         if (open) openDetail(open.dataset.open);
       });
 
-      /* ── Pintado y refresco ─────────────────────────────────────────────── */
+      /* ── Render and refresh ─────────────────────────────────────────────── */
       function apply(raw) {
         const previous = data;
         data = normalize(raw);
@@ -1011,20 +1060,20 @@
         if (age > Math.max(60, data.refreshSeconds * 3)) showBanner('attention', TEXT.stale(Math.round(age / 60)));
         else banner.hidden = true;
       }
-      function showBanner(status, message, html = false) {
+      function showBanner(status, ...content) {
         banner.dataset.status = status;
-        banner[html ? 'innerHTML' : 'textContent'] = message;
+        banner.replaceChildren(...content);
         banner.hidden = false;
       }
-      function offline(message, html = false) {
+      function offline(...message) {
         document.body.classList.add('is-offline');
         document.body.dataset.status = 'off';
         const state = document.getElementById('pulso-core-state');
         if (state) state.textContent = TEXT.core.off;
         root.querySelector('.core')?.setAttribute('data-status', 'off');
-        document.title = TEXT.title(TEXT.core.off, data?.service || 'Sistema');
+        document.title = TEXT.title(TEXT.core.off, data?.service || TEXT.system);
         setFavicon('off');
-        showBanner('error', message, html);
+        showBanner('error', ...message);
       }
       async function refresh() {
         const endpoint = root.dataset.endpoint;
@@ -1034,7 +1083,8 @@
           const response = await fetch(endpoint, {cache: 'no-store', credentials: 'same-origin', headers: {Accept: 'application/json'}});
           const json = (response.headers.get('Content-Type') || '').includes('json');
           if (response.redirected || response.status === 401 || response.status === 403 || (response.ok && !json)) {
-            offline(TEXT.expired(location.pathname), true);
+            const [before, link, after] = TEXT.expired;
+            offline(before, h('a', {href: location.pathname + location.search}, link), after);
             return;
           }
           if (!response.ok) throw new Error(String(response.status));
@@ -1056,6 +1106,13 @@
       stacked.addEventListener('change', draw);
       topoStacked.addEventListener('change', draw);
       document.fonts?.ready.then(() => requestAnimationFrame(draw));
+
+      // Static labels in the HTML follow the chosen language too.
+      document.querySelectorAll('.tab').forEach((tab) => { tab.querySelector('[data-role="tab-label"]').textContent = TEXT.tabs[tab.id.replace('tab-', '')]; });
+      document.getElementById('pulso-tabs').setAttribute('aria-label', TEXT.aria.tabs);
+      document.getElementById('pulso-legend').setAttribute('aria-label', TEXT.aria.legend);
+      document.getElementById('pulso-links').setAttribute('aria-label', TEXT.aria.links);
+      document.getElementById('pulso-headline').textContent = TEXT.checking;
 
       let seed = null;
       try { seed = JSON.parse(document.getElementById('pulso-seed').textContent); } catch (_) { seed = null; }
