@@ -7,7 +7,7 @@
 - The template speaks English by default and ships a Spanish dictionary. It picks one from `<html lang>` (regional variants such as `es-MX` included) and falls back to English. Copy now lives in `I18N` instead of `TEXT`.
 - Modal and tab URLs use English slugs: `#processes/<key>` and `#events`. The 1.x slugs `#procesos/<key>` and `#eventos` keep working.
 - `scripts/instalar.sh` is now `scripts/install.sh` and takes `--copy` (`--copiar` still works).
-- `scripts/capturas.sh` is replaced by `scripts/screenshots.mjs`, which needs no macOS tools, frames every view and renders an animated diagram.
+- `scripts/capturas.sh` is replaced by `scripts/screenshots.mjs`, which needs no macOS tools, frames every view and records animated tours of the Processes and Infrastructure tabs, with a cursor that opens the detail modals.
 - `SKILL.md` gains "when not to use it", a checkpoint after the inventory, a definition of done and a list of common mistakes.
 
 ### Fixed

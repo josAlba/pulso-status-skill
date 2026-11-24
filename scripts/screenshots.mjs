@@ -5,7 +5,7 @@
 //   node scripts/screenshots.mjs hero dark  only the ones named
 //
 // Needs Node 22+ (built-in WebSocket), Google Chrome or Chromium (set CHROME=/path/to/binary
-// if it isn't found) and, for the animated diagram, ffmpeg on the PATH.
+// if it isn't found) and, for the animated tours, ffmpeg on the PATH.
 // Chrome is driven over the DevTools protocol: each view is rendered live inside a framed
 // browser window (or a phone) and captured, so the images always match the template.
 
@@ -27,7 +27,6 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 const SHOTS = {
   hero: () => browserShot({path: '/?scenario=ko&theme=light', pad: 72, height: 800}),
   infrastructure: () => browserShot({path: '/?scenario=ko&theme=light#infra', height: 960}),
-  detail: () => browserShot({path: '/?scenario=ko&theme=light#processes/stock'}),
   'detail-infra': () => browserShot({path: '/?scenario=ko&theme=light#infra/gateway'}),
   events: () => browserShot({path: '/?scenario=ko&theme=light#events'}),
   dark: () => browserShot({path: '/?scenario=ok&theme=dark#infra', theme: 'dark', height: 960}),
@@ -35,7 +34,8 @@ const SHOTS = {
     {path: '/?scenario=ko&theme=light'},
     {path: '/?scenario=ok&theme=dark', theme: 'dark'},
   ]),
-  diagram: () => animation({path: '/?scenario=ok&theme=light', seconds: 6.8, fps: 20}),
+  'tour-processes': () => tour('processes'),
+  'tour-infrastructure': () => tour('infrastructure'),
 };
 
 /* ── Frames ───────────────────────────────────────────────────────────────── */
@@ -45,12 +45,18 @@ const BACKDROP = `
     radial-gradient(800px 520px at 100% 110%, rgb(23 147 95 / .22), transparent 60%),
     linear-gradient(160deg, #1b2b35 0%, #0e171d 100%);`;
 
+// With src = null the page area is left transparent (and the backdrop is cut around it),
+// so animated frames can be composited underneath.
 function windowPage({src, width, height, pad, theme, address}) {
   const dark = theme === 'dark';
+  const W = width + pad * 2, H = height + 40 + pad * 2, x = pad, y = pad + 40, r = 12;
+  const hole = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${W} ${H}'><path fill-rule='evenodd' d='M0 0H${W}V${H}H0Z M${x} ${y}H${x + width}V${y + height - r}A${r} ${r} 0 0 1 ${x + width - r} ${y + height}H${x + r}A${r} ${r} 0 0 1 ${x} ${y + height - r}Z'/></svg>`;
+  const backdrop = src ? BACKDROP : `background: transparent;`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
     html, body { margin: 0; }
-    body { width: ${width + pad * 2}px; height: ${height + 40 + pad * 2}px; display: grid; place-items: center; ${BACKDROP} }
-    .window { border-radius: 12px; overflow: hidden; background: ${dark ? '#0f181e' : '#edf1f3'};
+    body { width: ${W}px; height: ${H}px; display: grid; place-items: center; ${backdrop} }
+    .cut { position: fixed; inset: 0; ${BACKDROP} -webkit-mask: url("data:image/svg+xml,${encodeURIComponent(hole)}") 0 0 / 100% 100%; mask: url("data:image/svg+xml,${encodeURIComponent(hole)}") 0 0 / 100% 100%; }
+    .window { position: relative; border-radius: 12px; overflow: hidden; background: ${src ? (dark ? '#0f181e' : '#edf1f3') : 'transparent'};
       box-shadow: 0 0 0 1px rgb(255 255 255 / ${dark ? '.12' : '.08'}), 0 50px 100px -30px rgb(0 0 0 / .7), 0 18px 36px -12px rgb(0 0 0 / .45); }
     .bar { height: 40px; display: grid; grid-template-columns: 90px 1fr 90px; align-items: center;
       background: ${dark ? '#1a262e' : '#e3e9ed'}; border-bottom: 1px solid ${dark ? '#2a3a44' : '#cfd8de'}; }
@@ -61,12 +67,13 @@ function windowPage({src, width, height, pad, theme, address}) {
       border-radius: 8px; background: ${dark ? '#0f181e' : '#fbfcfd'}; color: ${dark ? '#93a3ad' : '#5b6b75'};
       font: 500 13px/1 -apple-system, 'Segoe UI', system-ui, sans-serif; letter-spacing: .01em; }
     .address svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2; }
-    img { display: block; width: ${width}px; height: ${height}px; }
+    img, .page { display: block; width: ${width}px; height: ${height}px; }
   </style></head><body>
+    ${src ? '' : '<div class="cut"></div>'}
     <div class="window">
       <div class="bar"><div class="dots"><i></i><i></i><i></i></div>
         <div class="address"><svg viewBox="0 0 12 12"><rect x="2" y="5.5" width="8" height="5.5" rx="1.2"/><path d="M4 5.5V4a2 2 0 0 1 4 0v1.5"/></svg>${address}</div></div>
-      <img src="${src}" alt="">
+      ${src ? `<img src="${src}" alt="">` : '<div class="page"></div>'}
     </div>
   </body></html>`;
 }
@@ -146,15 +153,23 @@ async function launch(profile) {
     listeners.add(listener);
   });
 
-  const {targetId} = await send('Target.createTarget', {url: 'about:blank'});
-  const {sessionId} = await send('Target.attachToTarget', {targetId, flatten: true});
-  const page = (method, params) => send(method, params, sessionId);
-  await page('Page.enable');
-  return {
-    page,
-    waitFor: (method) => waitFor(method, sessionId),
+  const browser = {
+    // A fresh tab: tours use one each, because Chrome's virtual clock can be set only once per tab.
+    async fresh() {
+      if (browser.targetId) await send('Target.closeTarget', {targetId: browser.targetId});
+      const {targetId} = await send('Target.createTarget', {url: 'about:blank'});
+      const {sessionId} = await send('Target.attachToTarget', {targetId, flatten: true});
+      Object.assign(browser, {
+        targetId,
+        page: (method, params) => send(method, params, sessionId),
+        waitFor: (method) => waitFor(method, sessionId),
+      });
+      await browser.page('Page.enable');
+    },
     close: () => { socket.close(); chrome.kill(); },
   };
+  await browser.fresh();
+  return browser;
 }
 
 /* ── Capture helpers ──────────────────────────────────────────────────────── */
@@ -199,34 +214,119 @@ async function phoneShot(screens) {
   return capture(current);
 }
 
-// Animated GIF of the processes diagram: frames are stepped with virtual time, so the
-// sparks move at their real speed no matter how long each capture takes.
-async function animation({path, seconds, fps}) {
-  if (spawnSync('ffmpeg', ['-version']).status !== 0) throw new Error('ffmpeg is needed for the animated diagram.');
-  const width = 1440, height = 900;
+/* ── Guided tours (animated GIFs) ─────────────────────────────────────────── */
+// A tour drives the real page: a visible cursor moves with eased motion, real mouse
+// events give hover and click, and frames are stepped with virtual time, so sparks,
+// the heartbeat and the modal animation play at their true speed however slow the
+// capture is. The frames are then composited into the browser window with ffmpeg.
+const CURSOR = `
+  const cursor = document.createElement('div');
+  cursor.popover = 'manual';
+  cursor.style.cssText = 'position:fixed;inset:auto;left:0;top:0;margin:0;padding:0;border:0;background:transparent;overflow:visible;width:26px;height:26px;pointer-events:none;';
+  cursor.innerHTML = '<svg width="26" height="26" viewBox="0 0 26 26" style="filter:drop-shadow(0 2px 3px rgb(0 0 0 / .35))"><path d="M5 3v18l4.5-4.2 3.1 6.6 3-1.4-3-6.4h6.2z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+  const style = document.createElement('style');
+  style.textContent = '@keyframes tour-ripple { from { transform: scale(.2); opacity: .55; } to { transform: scale(1); opacity: 0; } }';
+  document.head.append(style);
+  document.body.append(cursor);
+  cursor.showPopover();
+  window.__tour = {
+    move(x, y) { cursor.style.transform = 'translate(' + (x - 5) + 'px,' + (y - 3) + 'px)'; },
+    // Keep the cursor above the modal: re-entering the top layer puts it last.
+    sync() {
+      const open = document.getElementById('pulso-detail').open;
+      if (open && !this.above) { cursor.hidePopover(); cursor.showPopover(); }
+      this.above = open;
+    },
+    ripple() {
+      const ring = document.createElement('div');
+      ring.style.cssText = 'position:absolute;left:-13px;top:-15px;width:36px;height:36px;border-radius:50%;background:rgb(21 35 45 / .35);animation:tour-ripple .45s ease-out forwards;';
+      cursor.prepend(ring);
+      setTimeout(() => ring.remove(), 600);
+    },
+  };`;
+
+const ease = (t) => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+const TOURS = {
+  processes: {path: '/?scenario=ko&theme=light', height: 820, steps: [
+    {wait: 1.4},
+    {move: '[data-key="stock"] .card-name .open', over: .9}, {wait: .25}, {click: true}, {wait: 2.6},
+    {move: '#pulso-detail [data-close]', over: .7}, {wait: .2}, {click: true}, {wait: .6},
+    {move: '[data-key="failed"] .card-name .open', over: .9}, {wait: .25}, {click: true}, {wait: 2.4},
+    {move: '#pulso-detail [data-close]', over: .7}, {wait: .2}, {click: true}, {wait: .9},
+  ]},
+  infrastructure: {path: '/?scenario=ko&theme=light#infra', steps: [
+    {wait: 1.4},
+    {move: '[data-key="disk"] .card-name .open', over: .9}, {wait: .25}, {click: true}, {wait: 2.4},
+    {move: '#pulso-detail [data-close]', over: .7}, {wait: .2}, {click: true}, {wait: .6},
+    {move: '[data-key="app"] .card-name .open', over: .9}, {wait: .25}, {click: true}, {wait: 2.6},
+    {move: '#pulso-detail [data-close]', over: .7}, {wait: .2}, {click: true}, {wait: .9},
+  ]},
+};
+
+async function tour(name, {width = 1440, pad = 48, fps = 15, outWidth = 1200} = {}) {
+  if (spawnSync('ffmpeg', ['-version']).status !== 0) throw new Error('ffmpeg is needed for the animated tours.');
+  const {path, steps, height = 900} = TOURS[name];
+  const evaluate = async (expression) => (await browser.page('Runtime.evaluate', {expression, returnByValue: true})).result.value;
+  const mouse = (type, [x, y]) => browser.page('Input.dispatchMouseEvent', {type, x, y, button: type === 'mouseMoved' ? 'none' : 'left', clickCount: type === 'mouseMoved' ? 0 : 1});
+
+  await browser.fresh();
+  // 1. The window around the page, with a transparent hole where the page goes.
+  await render(windowPage({src: null, width, height, pad, theme: 'light', address: ADDRESS}),
+    width + pad * 2, height + 40 + pad * 2, 1);
+  await browser.page('Emulation.setDefaultBackgroundColorOverride', {color: {r: 0, g: 0, b: 0, a: 0}});
+  const overlay = join(scratch, 'window.png');
+  await writeFile(overlay, Buffer.from((await browser.page('Page.captureScreenshot', {format: 'png'})).data, 'base64'));
+  await browser.page('Emulation.setDefaultBackgroundColorOverride', {});
+
+  // 2. The page itself, frame by frame.
   await browser.page('Emulation.setDeviceMetricsOverride', {width, height, deviceScaleFactor: 1, mobile: false});
   const loaded = browser.waitFor('Page.loadEventFired');
   await browser.page('Page.navigate', {url: DEMO + path});
   await loaded;
   await sleep(1500);
-  const box = JSON.parse((await browser.page('Runtime.evaluate', {
-    expression: `JSON.stringify((() => { const r = document.getElementById('pulso-map').getBoundingClientRect(); return {x: r.x, y: r.y, w: r.width, h: r.height}; })())`,
-    returnByValue: true,
-  })).result.value);
-  const clip = {x: Math.max(0, box.x - 24), y: Math.max(0, box.y + box.h / 2 - 270), width: Math.min(width, box.w + 48), height: 540, scale: 1};
-  const frames = join(scratch, 'frames');
+  await evaluate(CURSOR);
+  const frames = join(scratch, `frames-${name}`);
   await mkdir(frames, {recursive: true});
-  const total = Math.round(seconds * fps);
-  for (let i = 0; i < total; i++) {
+  let at = [width - 190, height - 110], index = 0;
+  const frame = async () => {
     const expired = browser.waitFor('Emulation.virtualTimeBudgetExpired');
-    await browser.page('Emulation.setVirtualTimePolicy', {policy: 'pauseIfNetworkFetchesPending', budget: 1000 / fps});
+    // The first step pins the virtual clock to real time, or the page would think its data is stale.
+    await browser.page('Emulation.setVirtualTimePolicy', {policy: 'pauseIfNetworkFetchesPending', budget: 1000 / fps,
+      ...(index === 0 ? {initialVirtualTime: Date.now() / 1000} : {})});
     await expired;
-    const {data} = await browser.page('Page.captureScreenshot', {format: 'png', clip});
-    await writeFile(join(frames, `${String(i).padStart(4, '0')}.png`), Buffer.from(data, 'base64'));
+    await evaluate('__tour.sync()');
+    const {data} = await browser.page('Page.captureScreenshot', {format: 'png'});
+    await writeFile(join(frames, `${String(index++).padStart(4, '0')}.png`), Buffer.from(data, 'base64'));
+  };
+  await evaluate(`__tour.move(${at})`);
+  for (const step of steps) {
+    if (step.wait) for (let i = 0; i < Math.round(step.wait * fps); i++) await frame();
+    if (step.move) {
+      const to = await evaluate(`(() => { const r = document.querySelector(${JSON.stringify(step.move)}).getBoundingClientRect(); return [Math.round(r.x + Math.min(r.width / 2, 60)), Math.round(r.y + r.height / 2)]; })()`);
+      const from = at, count = Math.round(step.over * fps);
+      for (let i = 1; i <= count; i++) {
+        const k = ease(i / count);
+        at = [Math.round(from[0] + (to[0] - from[0]) * k), Math.round(from[1] + (to[1] - from[1]) * k)];
+        await evaluate(`__tour.move(${at})`);
+        await mouse('mouseMoved', at);
+        await frame();
+      }
+    }
+    if (step.click) {
+      await evaluate('__tour.ripple()');
+      await mouse('mousePressed', at);
+      await mouse('mouseReleased', at);
+    }
   }
-  const file = join(OUT, 'diagram.gif');
-  const result = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(fps), '-i', join(frames, '%04d.png'),
-    '-vf', 'scale=1200:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle',
+
+  await browser.fresh();
+
+  // 3. Composite and encode.
+  const file = join(OUT, `tour-${name}.gif`);
+  const result = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(fps), '-i', join(frames, '%04d.png'), '-i', overlay,
+    '-filter_complex', `[0:v]pad=${width + pad * 2}:${height + 40 + pad * 2}:${pad}:${pad + 40}:color=0x0e171d[page];[page][1:v]overlay=0:0,`
+      + `scale=${outWidth}:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=256:stats_mode=full[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle`,
     '-loop', '0', file], {stdio: 'inherit'});
   if (result.status !== 0) throw new Error('ffmpeg failed');
   await rm(frames, {recursive: true});
@@ -239,13 +339,17 @@ const unknown = wanted.filter((name) => !SHOTS[name]);
 if (unknown.length) { console.error(`Unknown image: ${unknown.join(', ')}. Choose from: ${Object.keys(SHOTS).join(', ')}`); process.exit(2); }
 
 let current;
+// An unanswered DevTools call leaves nothing to keep Node alive: say so instead of exiting quietly.
+process.on('exit', (code) => { if (code === 13) console.error(`✗ ${current}: Chrome stopped responding.`); });
 scratch = await mkdtemp(join(tmpdir(), 'pulso-shots-'));
 await mkdir(OUT, {recursive: true});
 const server = spawn(process.execPath, [join(ROOT, 'skills/pulso/scripts/demo-server.mjs'), '--port', String(PORT)], {stdio: 'ignore'});
 try {
   await sleep(600);
   browser = await launch(join(scratch, 'profile'));
-  for (const name of wanted.length ? wanted : Object.keys(SHOTS)) {
+  // Always in SHOTS order, whatever order the names were given in.
+  const order = Object.keys(SHOTS);
+  for (const name of wanted.length ? [...new Set(wanted)].sort((x, y) => order.indexOf(x) - order.indexOf(y)) : order) {
     current = name;
     const file = await SHOTS[name]();
     console.log(`✓ ${file.replace(ROOT + '/', '')}`);

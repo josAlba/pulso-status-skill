@@ -17,7 +17,7 @@ wired to your real backend and covered by tests.
 
 <br>
 
-<img src="docs/screenshots/hero.jpg" alt="Pulso status page: a big red verdict reading “2 components are down”, with job workers and services wired to a central core" width="100%">
+<img src="docs/screenshots/tour-processes.gif" alt="Pulso status page: a big red verdict reading “2 components are down”. Signals travel along the wires to a central core, and clicking the stopped stock sync and the failed jobs opens their detail modals" width="100%">
 
 </div>
 
@@ -69,7 +69,7 @@ Claude loads the skill and follows its workflow:
 
 ## Features
 
-<img src="docs/screenshots/diagram.gif" alt="Animated processes diagram: signals travel along the wires from each worker to the central core" width="100%">
+<img src="docs/screenshots/tour-infrastructure.gif" alt="Infrastructure tab: a map from visitors to the web server, application, database and cache with live wires. Clicking the disk and the application opens their modals, with usage, recent checks and connections" width="100%">
 
 - **A verdict first.** "All systems go", "One thing needs a look", "2 components are down".
   The top strip, the favicon and the tab title change colour together, so the state shows
@@ -96,12 +96,12 @@ Claude loads the skill and follows its workflow:
 
 <table>
   <tr>
+    <td width="50%"><img src="docs/screenshots/hero.jpg" alt="Processes tab with two components down: workers and services wired to a central core"></td>
     <td width="50%"><img src="docs/screenshots/infrastructure.jpg" alt="Infrastructure map from visitors to database and cache, with the disk and background workers flagged amber"></td>
-    <td width="50%"><img src="docs/screenshots/detail.jpg" alt="Detail modal for a stopped worker, with its recent checks, facts and a runbook link"></td>
   </tr>
   <tr>
+    <td align="center"><sub><b>Processes</b> · workers and services around the core</sub></td>
     <td align="center"><sub><b>Infrastructure map</b> · the path of a request, with live wires</sub></td>
-    <td align="center"><sub><b>Detail modal</b> · history, facts and runbooks, one URL each</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/detail-infra.jpg" alt="Detail modal for a slow payment gateway, with its response time trend"></td>
@@ -276,9 +276,10 @@ node scripts/screenshots.mjs
 ```
 
 Drives Chrome over the DevTools protocol against the demo server, frames each view and
-writes `docs/screenshots/`. Pass names (`hero`, `dark`, `mobile`, `diagram`…) to rebuild
-only some. Needs Node 22+, Chrome or Chromium (`CHROME=/path/to/chrome` if it isn't found)
-and ffmpeg for the animated diagram.
+writes `docs/screenshots/`. The animated tours drive the real page with a visible cursor,
+clicking components to open their modals. Pass names (`hero`, `dark`, `mobile`,
+`tour-processes`, `tour-infrastructure`…) to rebuild only some. Needs Node 22+, Chrome or
+Chromium (`CHROME=/path/to/chrome` if it isn't found) and ffmpeg for the tours.
 
 ## Background
 
